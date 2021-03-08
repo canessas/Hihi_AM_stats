@@ -1,0 +1,590 @@
+---
+title: "Hihi AM script - plots"
+author: "Stefano Canessa"
+date: "March 2021"
+output: html_document
+---
+
+```{r figure.2.summaries}
+
+# Arbitrary quantification of costs: 100*feeding*N*year, 10*movement 
+all.Costs <- all.FR*100*all.N+(all.Harvest>0)*10
+
+##############################################################################
+### Figure 3: mean and 95% CI outcomes for all objectives under all strategies
+
+# Strategy names for visualization
+strategy.names <- factor(c("Status quo","Sequential","Seasonal","New learning","Visitor","Responsive","Reinforcement"),
+                         levels=c("Status quo","Sequential","Seasonal",
+                                  "New learning","Visitor","Responsive","Reinforcement"))[run.strategies]
+strategy.names <- factor(strategy.names,levels=unique(strategy.names))
+
+fig2.df <- rbind(
+  # Total final population size for each strategy (not counting Hauturu)
+  data.frame(Strategy=strategy.names,
+             Variable=rep(paste0("Total birds at t=",n.years),length(run.strategies)),
+             Mean=apply(colSums(all.N[n.years,-1,,]),2,mean),
+             Lci=apply(colSums(all.N[n.years,-1,,]),2,quantile,probs=0.025),
+             Uci=apply(colSums(all.N[n.years,-1,,]),2,quantile,probs=0.975)),
+  
+  # Number of populations in each strategy (including Hauturu)
+  data.frame(Strategy=strategy.names,
+             Variable=rep(paste0("Number of populations at t=",n.years),length(run.strategies)),
+             Mean=apply(apply(all.N[n.years,,,],3,function(x)colSums(x>0)),2,mean),
+             Lci=apply(apply(all.N[n.years,,,],3,function(x)colSums(x>0)),2,quantile,probs=0.025),
+             Uci=apply(apply(all.N[n.years,,,],3,function(x)colSums(x>0)),2,quantile,probs=0.975)),
+  
+  # Total cost of each strategy
+  data.frame(Strategy=strategy.names,
+             Variable=rep("Total cost",length(run.strategies)),
+             Mean=apply(apply(all.Costs,c(3,4),sum,na.rm=T),2,mean)/1000,
+             Lci=apply(apply(all.Costs,c(3,4),sum,na.rm=T),2,quantile,probs=0.025)/1000,
+             Uci=apply(apply(all.Costs,c(3,4),sum,na.rm=T),2,quantile,probs=0.975)/1000),
+  
+  # Total number of feeding interventions for each strategy
+  data.frame(Strategy=strategy.names,
+             Variable=rep("Total feeding years",length(run.strategies)),
+             Mean=apply(apply(all.FR,c(3,4),sum),2,mean),
+             Lci=apply(apply(all.FR,c(3,4),sum),2,quantile,probs=0.025),
+             Uci=apply(apply(all.FR,c(3,4),sum),2,quantile,probs=0.975))
+)
+
+# Make plot: error bar or distributions, faceted by metric, grouped by action
+library(ggplot2);library(RColorBrewer);library(grid);library(Cairo);library(Manu)
+my.cols <- get_pal("Hihi") #brewer.pal(7, "Set1") # One colour for each action
+cairo_pdf(file="Hihi_AM_plots/Fig_2_summaries.pdf",width=120/25.4, height=90/25.4, pointsize=5,antialias = "subpixel")
+ggplot(fig2.df,aes(y=Mean,x=Strategy,group=Strategy))+
+  geom_point(position=position_dodge(width=0.5),size=0.7)+
+  geom_errorbar(aes(ymin=Lci,ymax=Uci,group=Strategy),
+                position=position_dodge(width=0.5),stat="identity",width=0,size=0.3)+
+  facet_wrap(~Variable,scales="free",ncol=2)+
+  # scale_colour_manual(name="",values=my.cols)+
+  theme_bw()+
+  theme(legend.position='none',
+        legend.title=element_text(size=5),
+        legend.text = element_text(margin = margin(0, 0, 0, 0, "pt"),size=4.5),
+        legend.text.align=0,
+        # legend.key.size = unit(3, "mm"),
+        legend.key.height = unit(4.6,"mm"), 
+        legend.key.width = unit(1.1,"mm"), 
+        legend.background = element_blank(),
+        legend.spacing=unit(c(3,3,3,3),"mm"),
+        plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border=element_rect(colour = "black", size = 0.3),
+        strip.background=element_blank(),
+        axis.title.y=element_text(vjust=0.5, size=8, color="black"),
+        axis.title.x=element_text(vjust=-1.8, size=8, color="black"),
+        axis.ticks.length=unit(0.5,"mm"),
+        axis.line = element_line(colour = "black", size = 0.01),
+        axis.ticks = element_line(colour = "black", size = 0.02),
+        axis.text.x = element_text(size=6,colour="black",angle=90,vjust=0.5,hjust=1),
+        axis.text.y = element_text(size=6,colour="black"),
+        strip.text.x = element_text(size=7),
+        plot.margin=unit(c(1,1.5,1.7,1), "mm"))+
+  scale_x_discrete(name="Strategy")
+dev.off() # Save
+```
+
+```{r Figure.3.site.summaries}
+
+N.mean <- apply(all.N,c(1,2,4),mean,na.rm=TRUE) # Population trends at each site
+FR.mean <- apply(all.FR,c(1,2,4),mean,na.rm=TRUE) # Feeding ratio
+Harvest.mean <- apply(all.Harvest,c(1,2),mean,na.rm=TRUE) # Harvest
+Km.mean <- apply(all.K.managed,c(1,2,4),mean,na.rm=TRUE) # Realized K
+Ke.mean <- apply(all.K.est,c(1,2,3,5),mean,na.rm=TRUE) # Estimated K
+
+####################################################################
+### Figure 2: demographic and management outcomes for all strategies
+
+library(ggplot2);library(RColorBrewer);library(grid);library(Cairo);library(Manu)
+# install.packages("devtools")
+# devtools::install_github("G-Thomson/Manu")
+my.cols <- get_pal("Hihi") #brewer.pal(6, "Set1")[c(4,5)] 
+# Create figure datafra,e
+fig3.df <- data.frame(Strategy=rep(run.strategies,each=n.sites*n.years),
+                    Site=rep(site.names,each=n.years),
+                    Year=rep(1:n.years,length(site.names)),
+                    N=as.numeric(N.mean),
+                    K=as.numeric(Km.mean),
+                    Harvest=as.numeric(Harvest.mean),
+                    Feeding=as.numeric(FR.mean))
+fig3.df$Site <- factor(fig3.df$Site,levels=site.names)
+# Lists to produce plots
+N.plots <- H.plots <- F.plots <- list()
+  
+for(w in 1:length(run.strategies)){
+  # Plot 1: site dynamics over time
+  dat <- fig3.df[fig3.df$Strategy==run.strategies[w]&fig3.df$Site!="Hauturu",]
+  
+  N.plots[[w]] <- ggplot(dat, aes(y=N, x=Year))+
+    facet_wrap(~ Site, scales="free", ncol=3)+
+    geom_line(size=1, alpha=0.6)+
+    geom_line(aes(x=Year,y=K),size=1, alpha=0.6,colour="red",linetype="dashed")+
+    theme_bw()+
+    theme(legend.position=c(.6,.86),
+          legend.background = element_rect(fill='transparent'),
+          legend.text=element_text(size=7),
+          legend.title=element_blank(),
+          strip.text=element_text(size=7),
+          axis.title.y=element_text(vjust=3, size=8, color="black"),
+          axis.title.x=element_text(vjust=-1, size=8, color="black"),
+          axis.text.x=element_text(size=7),
+          axis.text.y=element_text(size=7),
+          axis.ticks.length=unit(0.5,"mm"),
+          plot.margin=unit(c(3,3,3,1), "mm"))+
+    scale_y_continuous(name="Population size")+
+    scale_x_continuous(name="Year",limits=c(1,n.years),expand=c(0,0))
+  
+  cairo_pdf(file=paste0("Hihi_AM_plots/Fig_3_time_N_s", w, ".pdf"),width=110/25.4, height=110/25.4, pointsize=5,antialias = "subpixel")
+  print(N.plots[[w]])
+  dev.off()
+  
+  # PLOT 2: harvest over time - could become a more ambitious plot with flows
+  H.plots[[w]] <- ggplot(dat, aes(y=Harvest, x=Year))+
+    facet_wrap(~ Site, scales="fixed", ncol=2)+
+    geom_hline(yintercept=0,size=1, alpha=0.6,colour="red",linetype="dashed")+
+    geom_line(aes(x=Year,y=Harvest),size=1,alpha=0.6)+
+    theme_bw()+
+    theme(legend.position=c(.6,.86),
+          legend.background = element_rect(fill='transparent'),
+          legend.text=element_text(size=7),
+          legend.title=element_blank(),
+          strip.text=element_text(size=7),
+          axis.title.y=element_text(vjust=3, size=8, color="black"),
+          axis.title.x=element_text(vjust=-1, size=8, color="black"),
+          axis.text.x=element_text(size=7),
+          axis.text.y=element_text(size=7),
+          axis.ticks.length=unit(0.5,"mm"),
+          plot.margin=unit(c(3,3,3,1), "mm"))+
+    scale_y_continuous(name="Birds translocated",limits=c(range(fig3.df$Harvest)),expand=c(0,0))+
+    scale_x_continuous(name="Year",limits=c(1,n.years),expand=c(0,0))
+  cairo_pdf(file=paste0("Hihi_AM_plots/Fig_3_time_Harvest_s", w, ".pdf"),width=110/25.4, height=110/25.4, pointsize=5,antialias = "subpixel")
+  print(H.plots[[w]])
+  dev.off()
+  
+  # PLOT 3: feeding over time - could become a more ambitious plot with flows
+  F.plots[[w]] <- ggplot(dat, aes(y=feeding, x=Year))+
+    facet_wrap(~ Site, scales="fixed", ncol=2)+
+    # geom_hline(yintercept=0,size=1, alpha=0.6,colour="red",linetype="dashed")+
+    geom_col(aes(x=Year,y=Feeding),size=1,alpha=0.6)+
+    theme_bw()+
+    theme(legend.position=c(.6,.86),
+          legend.background = element_rect(fill='transparent'),
+          legend.text=element_text(size=7),
+          legend.title=element_blank(),
+          strip.text=element_text(size=7),
+          axis.title.y=element_text(vjust=3, size=8, color="black"),
+          axis.title.x=element_text(vjust=-1, size=8, color="black"),
+          axis.text.x=element_text(size=7),
+          axis.text.y=element_text(size=7),
+          axis.ticks.length=unit(0.5,"mm"),
+          plot.margin=unit(c(3,3,3,1), "mm"))+
+    scale_y_continuous(name="Frequency of feeding",limits=c(0,1),breaks=c(0,0.5,1),expand=c(0,0))+
+    scale_x_continuous(name="Year",limits=c(1,n.years),expand=c(0,0))
+  cairo_pdf(file=paste0("Hihi_AM_plots/Fig_3_time_Feeding_s", w, ".pdf"),width=110/25.4, height=110/25.4, pointsize=5,antialias = "subpixel")
+  print(F.plots[[w]])
+  dev.off()
+
+} # w (strategy)
+
+rm(list=c("dat","N.plots","H.plots","F.plots")) # Clean up
+```
+
+```{r figure.4.cumulative}
+
+########################################################################
+### Figure 4: outcomes over time for all objectives under all strategies
+
+fig4.df <- rbind(
+# Number of birds per year
+  data.frame(Year=rep(1:n.years,length(run.strategies)),
+             Variable=factor(rep(paste0("Total birds at t=",n.years),n.years*length(run.strategies))),
+             Strategy=factor(rep(strategy.names,each=n.years)),
+             Mean=as.numeric(apply(apply(all.N[,-1,,],c(1,3,4),sum),c(1,3),mean)),
+             Lci=as.numeric(apply(apply(all.N[,-1,,],c(1,3,4),sum),c(1,3),quantile,probs=0.025)),
+             Uci=as.numeric(apply(apply(all.N[,-1,,],c(1,3,4),sum),c(1,3),quantile,probs=0.975))),
+  # Cumulative costs until a given year
+  data.frame(Year=rep(1:n.years,length(run.strategies)),
+             Variable=factor(rep(paste0("Cumulative costs at t=",n.years),n.years*length(run.strategies))),
+             Strategy=factor(rep(strategy.names,each=n.years)),
+             Mean=as.numeric(apply(apply(apply(all.Costs,c(1,3,4),sum,na.rm=T),c(2,3),cumsum),c(1,3),mean))/1000,
+             Lci=as.numeric(apply(apply(apply(all.Costs,c(1,3,4),sum,na.rm=T),c(2,3),cumsum),c(1,3),quantile,probs=0.025))/1000,
+             Uci=as.numeric(apply(apply(apply(all.Costs,c(1,3,4),sum,na.rm=T),c(2,3),cumsum),c(1,3),quantile,probs=0.975))/1000),
+  # Number of active populations per year
+  data.frame(Year=rep(1:n.years,length(run.strategies)),
+             Variable=factor(rep(paste0("N of populations at t=",n.years),n.years*length(run.strategies))),
+             Strategy=factor(rep(strategy.names,each=n.years)),
+             Mean=as.numeric(apply(apply(all.N,c(3,4),function(x)rowSums(x>0)),c(1,3),mean)),
+             Lci=as.numeric(apply(apply(all.N,c(3,4),function(x)rowSums(x>0)),c(1,3),quantile,probs=0.025)),
+             Uci=as.numeric(apply(apply(all.N,c(3,4),function(x)rowSums(x>0)),c(1,3),quantile,probs=0.975))),
+  # Number of feeding interventions required per year
+  data.frame(Year=rep(1:n.years,length(run.strategies)),
+             Variable=factor(rep(paste0("Fed sites at t=",n.years),n.years*length(run.strategies))),
+             Strategy=factor(rep(strategy.names,each=n.years)),
+             Mean=as.numeric(apply(apply(all.FR,c(1,3,4),sum),c(1,3),mean)),
+             Lci=as.numeric(apply(apply(all.FR,c(1,3,4),sum),c(1,3),quantile,probs=0.025)),
+             Uci=as.numeric(apply(apply(all.FR,c(1,3,4),sum),c(1,3),quantile,probs=0.975)))
+)
+fig4.df$Variable <- factor(fig4.df$Variable,
+                           levels=c("N of populations at t=20","Total birds at t=20","Cumulative costs at t=20","Fed sites at t=20"))
+
+# Make plot: mean curves or ribbons, faceted by metric, grouped by action
+library(ggplot2);library(RColorBrewer);library(grid);library(Cairo);library(ggrepel)
+my.cols <- get_pal("Hihi") #brewer.pal(7, "Set1") # One colour for each action
+cairo_pdf(file="Hihi_AM_plots/Fig_4_cumulative.pdf",width=120/25.4, height=90/25.4, pointsize=5,antialias = "subpixel")
+ggplot(fig4.df,aes(y=Mean,x=Year,group=Strategy))+
+  geom_line(size=0.7)+
+  geom_text_repel(data=subset(fig4.df,Year==n.years),segment.color="red",
+                  size=2,segment.alpha=0.5,segment.size=0.5,
+                  aes(label=as.numeric(Strategy),x=Year+0.1),nudge_x=15)+ 
+  # CHECK GEOM_TEXT_REPEL
+  # geom_ribbon(aes(ymin=Lci,ymax=Uci,group=Strategy),stat="identity",alpha=0.5)+
+  facet_wrap(~Variable,scales="free",ncol=2)+
+  theme_bw()+
+  theme(legend.position='none',
+        legend.title=element_text(size=5),
+        legend.text = element_text(margin = margin(0, 0, 0, 0, "pt"),size=4.5),
+        legend.text.align=0,
+        # legend.key.size = unit(3, "mm"),
+        legend.key.height = unit(4.6,"mm"), 
+        legend.key.width = unit(1.1,"mm"), 
+        legend.background = element_blank(),
+        legend.spacing=unit(c(3,3,3,3),"mm"),
+        plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border=element_rect(colour = "black", size = 0.3),
+        strip.background=element_blank(),
+        axis.title.y=element_text(vjust=0.5, size=8, color="black"),
+        axis.title.x=element_text(vjust=-1.8, size=8, color="black"),
+        axis.ticks.length=unit(0.5,"mm"),
+        axis.line = element_line(colour = "black", size = 0.01),
+        axis.ticks = element_line(colour = "black", size = 0.02),
+        axis.text.x = element_text(size=6,colour="black"),
+        axis.text.y = element_text(size=6,colour="black"),
+        strip.text.x = element_text(size=7),
+        plot.margin=unit(c(1,1.5,1.7,1), "mm"))+
+  scale_x_continuous(name="Year",limits=c(1,n.years*1.2),expand=c(0,0))
+dev.off()
+```
+
+```{r figure.5.learning}
+
+########################################################################
+### Figure 5: learning over time for all objectives under all strategies
+# Choose strategies 1, 3, 4 (status quo, seasonal, new learning)
+# Choose sites 2, 6, 11 (Bushy, Tiri, ...)
+which.strategies <- c(1,2) #run.strategies #c(1,4,5)
+which.sites <- which(site.names%in%site.names[c(2,4,6,13)])
+
+# Strategy names for visualization
+strategy.names <- factor(c("Status quo","Sequential","Seasonal","New learning","Visitor","Responsive","Reinforcement"),
+                         levels=c("Status quo","Sequential","Seasonal",
+                                  "New learning","Visitor","Responsive","Reinforcement"))[run.strategies]
+strategy.names <- factor(strategy.names,levels=unique(strategy.names))
+
+fig5.df <- data.frame(
+  Site=rep(rep(site.names[which.sites],each=n.years),length(which.strategies)),
+  Year=rep(1:n.years,length(which.sites)*length(which.strategies)),
+  Strategy=rep(strategy.names[which.strategies],each=n.years*length(which.sites)),
+  N = as.numeric(apply(all.N[,,,which.strategies],c(1,2,4),mean,na.rm=TRUE)[,which.sites,]),
+  K.nf.true = rep(apply(all.K.true[,,,which.strategies],c(1,2,4),mean,na.rm=TRUE)[1,which.sites,],each=n.years),
+  K.f.true = rep(apply(all.K.true[,,,which.strategies],c(1,2,4),mean,na.rm=TRUE)[2,which.sites,],each=n.years),
+  K.f=as.numeric(apply(all.K.est[,,feed.levels,,which.strategies],c(1,2,4),mean,na.rm=TRUE)[,which.sites,]),
+  K.f.sd=as.numeric(apply(sqrt(1/all.K.est.tau[,,feed.levels,,which.strategies]),c(1,2,4),mean,na.rm=TRUE)[,which.sites,]),
+  K.nf=as.numeric(apply(all.K.est[,,1,,which.strategies],c(1,2,4),mean,na.rm=TRUE)[,which.sites,]),
+  K.nf.sd=as.numeric(apply(sqrt(1/all.K.est.tau[,,1,,which.strategies]),c(1,2,4),mean,na.rm=TRUE)[,which.sites,])
+  # dummy1=rep(NA,length(site.names[which.sites])*(n.years+1)),
+  # dummy2=rep_len(c("K.f","K.nf"),length.out=length(site.names[which.sites])*(n.years+1))
+  )
+# Create rug points for harvest
+# fig5.df$Hv.rug=ifelse(as.numeric(apply(all.Harvest[,,,which.strategies],c(1,2,4),mean,na.rm=TRUE)[,which.sites,])<0,"-",
+              # ifelse(as.numeric(apply(all.Harvest[,,,which.strategies],c(1,2,4),mean,na.rm=TRUE)[,which.sites,])>0,"+",NA))
+# fig5.df$FR.rug=ifelse(as.numeric(apply(all.FR[,,,which.strategies],c(1,2,4),mean,na.rm=TRUE)[,which.sites,])==1,"X",
+              # ifelse(as.numeric(apply(all.FR[,,,which.strategies],c(1,2,4),mean,na.rm=TRUE)[,which.sites,])>1,"+",NA))
+fig5.df$Site <- factor(fig5.df$Site,levels=site.names[which.sites])
+
+# PLOT 1: learning about K over time - NOTE: fix legend in inkscape
+library(RColorBrewer);library(ggplot2);library(Manu)
+my.cols <- c(get_pal("Hihi")[c(1,2,5)]) #brewer.pal(7, "Set1") # One colour for each action
+colors <- c("K.f.true"=my.cols[2],"K.f"=my.cols[2],"K.nf.true"=my.cols[1],"K.nf"=my.cols[1], "N"=my.cols[3])#,"-"="red","+"="blue","X"="transparent")
+cairo_pdf(file="Hihi_AM_plots/Fig_5_learning_all.pdf",width=143/25.4, height=110/25.4, pointsize=5,antialias = "subpixel")
+ggplot(fig5.df, aes(x=Year))+
+  facet_wrap(~ Strategy+Site, scales="free", ncol=length(which.sites))+
+  geom_line(aes(x=Year,y=K.f.true,color="K.f.true"),size=.5,alpha=1,linetype="dashed")+
+  geom_line(aes(x=Year,y=K.nf.true,color="K.nf.true"),size=.5,alpha=1,linetype="dashed")+
+  geom_ribbon(aes(x=Year,ymin=K.nf-K.nf.sd,ymax=K.nf+K.nf.sd,fill="K.nf",color="K.nf"),alpha=0.3,size=0,linetype=0)+
+  geom_ribbon(aes(x=Year,ymin=K.f-K.f.sd,ymax=K.f+K.f.sd,fill="K.f",color="K.f"),alpha=0.3,size=0,linetype=0)+
+  geom_line(aes(x=Year,y=N,color="N"),size=.5,alpha=0.8)+
+  # geom_point(aes(x=Year,y=-1,color=FR.rug),alpha=0.3,size=1)+
+  # geom_point(aes(x=Year+100,y=-1,color=Hv.rug),alpha=0.3,size=1)+
+  scale_colour_manual(name="",
+                      guide=guide_legend(title.position="top",direction="vertical",
+                                         override.aes = list(fill=colors,color="transparent")),
+                      values=colors,
+                      breaks=c("K.f.true","K.f","K.nf.true","K.nf","N"),
+                      labels=c("True K(fed) \n","Estimated K(fed) \n","True K(unfed) \n","Estimated K(unfed) \n","True N \n"))+ # ,"-","+",""
+  scale_fill_manual(name="",
+                      guide=guide_legend(title.position="top",direction="vertical"),
+                      values=colors,
+                      breaks=c("K.f.true","K.f","K.nf.true","K.nf","N"), #,"-","+","X"
+                      labels=c("True K(fed) \n","Estimated K(fed) \n","True K(unfed) \n","Estimated K(unfed) \n","True N \n"))+
+  guides(fill=FALSE)+
+  theme_bw()+
+  theme(legend.position='right',
+        legend.background = element_rect(fill='transparent'),
+        legend.text=element_text(size=7,vjust=-1),
+        legend.title=element_blank(),
+        legend.key = element_rect(color = NA, fill = NA),
+        legend.key.height = unit(0.01, "lines"),
+        legend.key.width = unit(1.5, "lines"),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),
+        strip.text=element_text(size=7),
+        strip.background = element_blank(),
+        axis.title.y=element_text(vjust=3, size=8, color="black"),
+        axis.title.x=element_text(vjust=-1, size=8, color="black"),
+        axis.text.x=element_text(size=7),
+        axis.text.y=element_text(size=7),
+        axis.ticks.length=unit(0.5,"mm"),
+        plot.margin=unit(c(1,3,1,1), "mm"))+
+  scale_y_continuous(name="Number of birds",expand=c(0,0.2))+
+  scale_x_continuous(name="Year",limits=c(1,n.years),expand=c(0,0))
+dev.off() # Save
+
+# ADJUSTED SETTINGS FOR PLOTTING ALL SITES X ALL STRATEGIES
+  # theme(legend.position='right',
+  #       legend.background = element_rect(fill='transparent'),
+  #       legend.text=element_text(size=7,vjust=-1),
+  #       legend.title=element_blank(),
+  #       legend.key = element_rect(color = NA, fill = NA),
+  #       legend.key.height = unit(0.01, "lines"),
+  #       legend.key.width = unit(1.5, "lines"),
+  #       panel.grid.major = element_blank(), 
+  #       panel.grid.minor = element_blank(),
+  #       strip.text=element_text(size=7),
+  #       strip.background = element_blank(),
+  #       axis.title.y=element_text(vjust=3, size=8, color="black"),
+  #       axis.title.x=element_text(vjust=-1, size=8, color="black"),
+  #       axis.text.x=element_text(size=7),
+  #       axis.text.y=element_text(size=7),
+  #       axis.ticks.length=unit(0.5,"mm"),
+  #       plot.margin=unit(c(1,3,1,1), "mm"))+
+```
+
+```{r figure.6.flows}
+library(dplyr)
+# Create dataset
+Tiri=rev(c(-36.601261, 174.890243))
+Kapiti=rev(c(-40.857698, 174.911391))
+Karori=rev(c(-41.290480, 174.752549))
+Hen=rev(c(-35.962345, 174.717707))
+Motu=rev(c(-34.470808, 172.637669))
+Portland=rev(c(-39.289338, 177.867954))
+NewSite1=rev(c(-37.74, 177.455))
+NewSite2=rev(c(-39,174.5))
+data <- rbind(Tiri,Kapiti,Karori,Hen,Motu,Portland,NewSite1,NewSite2)  %>% as.data.frame()
+colnames(data)=c("long","lat")
+# Bind into data frame
+n.comb <- ncol(combn(data[,1],2))
+ddf.comb <- data.frame(start_lon=combn(data[,1],2)[1,],
+                  start_lat=combn(data[,2],2)[1,],
+                  end_lon=combn(data[,1],2)[2,],
+                  end_lat=combn(data[,2],2)[2,],
+                  airline=rep("AA",n.comb),
+                  airport1=combn(rownames(data),2)[1,],
+                  airport2=combn(rownames(data),2)[2,])
+ddf.unique <- data.frame(Site=rownames(data),
+                         Lon=data[,1],
+                         Lat=data[,2],
+                         N=sample(1:1000,nrow(data),replace=F))
+library(mapdeck)
+ddf.comb$info <- paste0("<b>",ddf.comb$airport1, " - ", ddf.comb$airport2, "</b>")
+mapdeck(token = 'pk.eyJ1IjoiY2FuZXNzYXMiLCJhIjoiY2thZHp5M3JrMXZxejMycXczN2tpZ3M0OSJ9.Glv4wCkQPTtwIaTI3dCOmg', 
+        style = mapdeck_style('satellite')) %>%
+  add_animated_arc(
+  data = ddf.comb
+  , layer_id = "arclayer"
+  , origin = c("start_lon", "start_lat")
+  , destination = c("end_lon", "end_lat")
+  , stroke_from = "airport1"
+  , stroke_to = "airport2"
+  , stroke_width = "stroke"
+  , trail_length = 10
+  , tooltip = "info"
+  , auto_highlight = TRUE
+  , legend = FALSE
+ ) %>% 
+  add_scatterplot(
+    data=ddf.unique
+    ,lon='Lon'
+    ,lat='Lat'
+    ,radius=10
+ )
+  
+  
+  # 
+  # add_arc(
+  #   data = ddf.comb
+  #   , origin = c("start_lon", "start_lat")
+  #   , destination = c("end_lon", "end_lat")
+  #   , stroke_from = "airport1"
+  #   , stroke_to = "airport2"
+  #   , tooltip = "info"
+  #   , layer_id = 'arclayer'
+  # ) 
+  # # add_text(
+  # #   data = ddf.unique
+  # #   , lon = 'Lon'
+  # #   , lat = 'Lat'
+  # #   , text = 'Site'
+  # #   , font_family="Gill Sans, sans-serif"
+  # #   , layer_id = 'text'
+  # #   , fill_colour = '#ffffff'
+  # # ) 
+```
+
+```{r animation_try}
+# libraries:
+library(ggplot2)
+library(gganimate)
+library(tidyr)
+n.years=20;n.sites=1;n.sims=500
+N <- array(NA,dim=c(n.years,n.sites,n.sims))
+N[1,,] <- c(sample(200:300,n.sites)) 
+for(s in 1:n.sims){
+  for(i in 1:n.sites){
+    for(t in 1:(n.years-1)){
+      N[t+1,i,s] <- N[t,i,s]*rnorm(1,1,0.2)
+    }    
+  }
+}
+ddf <- data.frame(Year=rep(1:n.years,n.sites*n.sims),
+                  Sim=rep(1:n.sims,each=n.years*n.sites),
+                  Count=as.numeric(N),
+                  Step=c(c(1:(n.years*15)),rep((1:(n.sims-15))+n.years*15,each=n.years)))
+ddf$YearSim <- 1:nrow(ddf)
+ddf$Count[21:80] <- NA
+ddf$Count[101:180] <- NA
+ddf$Count[201:240] <- NA
+# Plot
+myPlot <- ddf %>%
+  ggplot(aes(x=Year, y=Count, group=Sim, colour=Sim)) +
+  geom_line(size=1.5) +
+  geom_point() +
+  theme_bw()+
+  theme(legend.position='none',
+        axis.title.y=element_text(vjust=3, size=30, color="black"),
+        axis.title.x=element_text(vjust=-1, size=18, color="black"),
+        axis.text.x=element_text(size=40),
+        axis.text.y=element_text(size=40),
+        axis.ticks.length=unit(0.5,"mm"),
+        plot.margin=unit(c(4,4,4,4), "mm"),
+        panel.background = element_rect(fill = "transparent", colour = NA),  
+        plot.background = element_rect(fill = "transparent", colour = NA))+
+  scale_y_continuous(name="",expand=c(0,0))+
+  scale_x_continuous(name="",limits=c(1,n.years),expand=c(0,0))+
+  transition_reveal(Step)
+animate(myPlot, duration = 20, fps = 5, 
+        width = 1800, height = 1000, , bg = 'transparent', renderer = gifski_renderer())
+anim_save("Output_single.gif")
+```
+
+```{r animation_try_2}
+# libraries:
+library(ggplot2)
+library(gganimate)
+library(tidyr)
+n.years=20;n.sites=16;n.sims=100
+N <- array(NA,dim=c(n.years,n.sites,n.sims))
+N[1,,] <- c(sample(200:300,n.sites)) 
+for(s in 1:n.sims){
+  for(i in 1:n.sites){
+    for(t in 1:(n.years-1)){
+      N[t+1,i,s] <- N[t,i,s]*rnorm(1,1,0.2)
+    }    
+  }
+}
+site.names <- paste("Site", 1:n.sites)
+ddf <- data.frame(Year=rep(1:n.years,n.sites*n.sims),
+                  Site=rep(rep(1:n.sites,each=n.years),n.sims),
+                  Sim=rep(1:n.sims,each=n.years*n.sites),
+                  Count=as.numeric(N))
+ddf$Step <- rep(1:n.sims,each=n.years*n.sites)
+  
+# Plot
+myPlot <- ddf %>%
+  ggplot(aes(x=Year, y=Count, group=Sim, colour=Sim)) +
+  geom_line(size=1) +
+  geom_point() +
+  facet_wrap(~Site,scales="free")+
+  theme_bw()+
+  theme(legend.position='none',
+        axis.title.y=element_text(vjust=3, size=30, color="black"),
+        axis.title.x=element_text(vjust=-1, size=18, color="black"),
+        axis.text.x=element_text(size=30),
+        axis.text.y=element_text(size=30),
+        axis.ticks.length=unit(0.5,"mm"),
+        strip.text=element_text(size=30, color="black"),
+        strip.background=element_rect(fill="transparent",colour=NA),
+        plot.margin=unit(c(4,4,4,4), "mm"),
+        panel.background = element_rect(fill = "transparent", colour = NA),  
+        plot.background = element_rect(fill = "transparent", colour = NA))+
+  scale_y_continuous(name="",expand=c(0,0))+
+  scale_x_continuous(name="",limits=c(1,n.years),expand=c(0,0))+
+  transition_reveal(Step)
+animate(myPlot, duration = 20, fps = 10, 
+        width = 1800, height = 1000, , bg = 'transparent', renderer = gifski_renderer())
+anim_save("Output_faceted.gif")
+```
+
+```{r animation_try_3}
+# libraries:
+library(ggplot2)
+library(gganimate)
+library(tidyr)
+n.years=20;n.sites=1;n.sims=100
+N <- array(NA,dim=c(n.years,n.sites,n.sims))
+N[1,,] <- c(rep(150,n.sites)) 
+for(s in 1:n.sims){
+  for(i in 1:n.sites){
+    for(t in 1:(n.years-1)){
+      N[t+1,i,s] <- N[t,i,s]*rnorm(1,1,0.2)
+    }    
+  }
+}
+N <- N[,,c(24,which.min(N[n.years,1,]),which.max(N[n.years,1,]))]
+ddf <- data.frame(Year=rep(1:n.years,n.sites*3),
+                  Sim=rep(1:3,each=n.years*n.sites),
+                  Count=as.numeric(N),
+                  Step=1:(n.years*3),
+                  Type=c(rep("dashed",n.years),rep("solid",n.years),rep("solid",n.years)))
+ddf$YearSim <- 1:nrow(ddf)
+ddf$Count[21:25] <- ddf$Count[1:5]
+ddf$Count[41:45] <- ddf$Count[1:5]
+# Plot
+myPlot <- ddf %>%
+  ggplot(aes(x=Year, y=Count, group=Sim,linetype=Type)) +
+  geom_line(size=1.5) +
+  geom_point() +
+  theme_bw()+
+  theme(legend.position='none',
+        axis.title.y=element_text(vjust=3, size=30, color="black"),
+        axis.title.x=element_text(vjust=-1, size=18, color="black"),
+        axis.text.x=element_text(size=40),
+        axis.text.y=element_text(size=40),
+        axis.ticks.length=unit(0.5,"mm"),
+        plot.margin=unit(c(4,4,4,4), "mm"),
+        panel.background = element_rect(fill = "transparent", colour = NA),  
+        plot.background = element_rect(fill = "transparent", colour = NA))+
+  scale_y_continuous(name="",expand=c(0,0))+
+  scale_x_continuous(name="",limits=c(1,n.years),expand=c(0,0))+
+  transition_reveal(Step)
+animate(myPlot, duration = 10, fps = 10, 
+        width = 1800, height = 1000, , bg = 'transparent', renderer = gifski_renderer())
+anim_save("Output_stepped.gif")
+```
+
+  

@@ -1,0 +1,465 @@
+---
+title: "Hihi AM script for parallel NIMBLE run"
+author: "Stefano Canessa"
+date: "March 2021"
+output: html_document
+---
+
+```{r AM.model.parallel}
+
+start.time <- Sys.time() # Start timing
+  
+########################################################################################################################
+############################################## 1. SIMULATION SETTINGS ##################################################
+
+# Load packages and functions
+invisible(lapply(c("mc2d","abind","blastula","doParallel","keyring","doRNG","doSNOW","itertools","stringr","tidyverse", "nimble"), 
+library, character.only=TRUE))
+# Source strategy decision rules and extra functions
+source("Hihi_AM_all_strategies_source.R",local=TRUE)
+# For completion email
+send.email <- FALSE
+if(send.email==TRUE){create_smtp_creds_key(id="hotmail",host="smtp.live.com",
+               port=587,user="stefano.canessa@hotmail.com",use_ssl=TRUE)}
+
+# NIMBLE: 1x20x1000 = 45 minutes
+# NIMBLE: 7x1x20x1000 = 4.65 hrs
+max.cores <- detectCores(logical=FALSE)
+n.sims <- (max.cores-1)*10; n.years <- 10; feed.levels <- 2 # Simulation settings (n.sims a multiple of n.cores)
+ni <- 1000; nb <- 500; nt <- 1; nc <- 3 # MCMC settings
+this.seed <- 123
+
+# Which strategies to run?
+run.strategies <- c(1,2,5,7)
+results.strategies <- list()
+
+########################################################################################################################
+  ############################################## 2. PRIOR INFORMATION ####################################################
+  
+  # Load elicited values
+  final.K <- read.csv("Hihi_AM_final_estimates.csv")
+  final.K$Site <- factor(final.K$Site,levels=unique(final.K$Site))
+  
+  ### Pick original site data
+  all.sites <- data.frame(
+  Name=c("Hauturu","Bushy","Cuvier","Kapiti","Karori","Maunga","Moko","Rotok","Rotor","Shake","Tara","Tawh","Tiri"),
+  Type=c("Island","Mainland","Island","Island","Mainland","Mainland","Island","Island","Island","Island","Island","Mainland","Island"),
+  Access=c("Remote","Reach","Remote","Reach","Reach","Reach","Reach","Reach","Reach","Reach","Remote","Reach","Reach"),
+  Age=c(NA,6,NA,2,4,3,NA,5,NA,NA,NA,NA,1)) # 1 = oldest
+  
+  # Which sites to use for this simulation
+  site.names.orig <- all.sites$Name # Site names - CHECK SPELLING
+  n.sites.orig <- length(site.names.orig) # How many
+  which.sites.orig <- which(all.sites$Name %in% site.names.orig) # Vector positions
+  # Site type (mainland or island)
+  site.type <- all.sites$Type[which.sites.orig]
+  # Site type (mainland or island)
+  site.access <- all.sites$Access[which.sites.orig]
+  # Site ages for genetic releases - correct order should be Kapiti,Tiri, Karori, Maunga, Bushy, Rotokare
+  site.ages.orig <- all.sites$Age[which.sites.orig]
+  
+  ### CARRYING CAPACITIES
+  # Load elicited values
+  K.orig <- abind(
+  tapply(final.K$Min,list(final.K$Site,final.K$Fed),mean),  # Min
+  tapply(final.K$Mode,list(final.K$Site,final.K$Fed),mean), # Mode
+  tapply(final.K$Max,list(final.K$Site,final.K$Fed),mean),  # Max
+  along=3
+  )
+  # Priors for selected initial sites
+  K.sites.orig <- abind(
+  Min=rbind(Unfed=K.orig[which.sites.orig,2,1],Fed=K.orig[which.sites.orig,1,1]),  # Min
+  Mode=rbind(Unfed=K.orig[which.sites.orig,2,2],Fed=K.orig[which.sites.orig,1,2]), # Mode
+  Max=rbind(Unfed=K.orig[which.sites.orig,2,3],Fed=K.orig[which.sites.orig,1,3]),  # Max
+  along=3
+  )
+  K.sites.orig[K.sites.orig<0] <- 0 # Truncate lower bound of the rescaled distribution
+  # Fill missing values to avoid error messages (Hauturu, Cuvier, Taranga) - these values are not used in the sim
+  K.sites.orig[2,which(site.names.orig=="Hauturu"),] <- K.sites.orig[1,which(site.names.orig=="Hauturu"),] # Hauturu
+  K.sites.orig[2,which(site.names.orig=="Cuvier"),] <- K.sites.orig[1,which(site.names.orig=="Cuvier"),] # Cuvier
+  K.sites.orig[2,which(site.names.orig=="Tara"),] <- K.sites.orig[1,which(site.names.orig=="Tara"),] # Taranga
+  # Fix Rotoroa unfed - avoid the all-zero distribution which sometimes leads to JAGS failure
+  K.sites.orig[1,which(site.names.orig=="Rotor"),] <- c(0,1,2) # Rotoroa
+  # Apply sex ratio to all sites (elicited values are both sexes)
+  K.sites.orig <- round(K.sites.orig/2,0)
+  
+  # ONLY IF NEEDED: create new hypothetical sites and name them
+  n.sites.new <- 0 # How many new sites?
+  site.type.new <- site.names.new <- sample(c("Mainland","Island"),n.sites.new,replace=T) # Type of new sites - at random
+  site.names.new[site.type.new=="Island"] <- paste0(site.type.new[site.type.new=="Island"],1:sum(site.type.new=="Island"))
+  site.names.new[site.type.new=="Mainland"] <- paste0(site.type.new[site.type.new=="Mainland"],1:sum(site.type.new=="Mainland"))
+  K.nf.temp <- runif(n.sites.new,1,100); K.f.temp <- K.nf.temp*runif(n.sites.new,2,10) # Generate mode values
+  K.sites.new <- abind(
+  Min=rbind(Unfed=K.nf.temp,Fed=K.f.temp)*runif(n.sites.new,0.5,0.9), # Min - defined as random proportion of mode
+  Mode=rbind(Unfed=K.nf.temp,Fed=K.f.temp),                           # Mode
+  Max=rbind(Unfed=K.nf.temp,Fed=K.f.temp)*runif(n.sites.new,1.1,1.5), # Max - defined as random proportion of mode
+  along=3
+  )
+  colnames(K.sites.new) <- site.names.new
+  
+  # Bind original and new sites
+  K.sites <- abind(
+  cbind(K.sites.orig[,,1],K.sites.new[,,1]),
+  cbind(K.sites.orig[,,2],K.sites.new[,,2]),
+  cbind(K.sites.orig[,,3],K.sites.new[,,3]),
+  along=3
+  )
+  site.names <- colnames(K.sites);n.sites <- length(site.names)
+  site.ages <- c(site.ages.orig,rep(NA,n.sites.new))
+  
+  # Get means and precision to define the JAGS model's priors
+  K.mn.prior <- K.mn.tau.prior <- array(NA,dim=c(2,ncol(K.sites)),dimnames=list(c("Unfed","Fed"),site.names))
+  for(i in 1:ncol(K.sites)){
+  for(j in 1:2){
+  K.mn.prior[j,i] <- mean(rpert(10000,min=K.sites[j,i,1],mode=K.sites[j,i,2],max=K.sites[j,i,3]),na.rm=TRUE)      # Mean
+  K.mn.tau.prior[j,i] <- sd(rpert(10000,min=K.sites[j,i,1],mode=K.sites[j,i,2],max=K.sites[j,i,3]),na.rm=TRUE)^-2 # Precision
+  }
+  }
+  K.mn.tau.prior[K.mn.prior==0] <- 1 # Avoid errors
+  
+  # w=1; s=1
+  
+  for(w in 1:length(run.strategies)){
+  strategy <- run.strategies[w]
+  set.seed(123) # Change or fix for stochasticity among strategies
+  
+  # Create parallel structure
+  cl <- makeCluster(max.cores-1)
+  registerDoSNOW(cl)
+  pb <- txtProgressBar(max = n.sims, style = 3)
+  progress <- function(n) setTxtProgressBar(pb, n)
+  opts <- list(progress = progress)
+  
+  # Output to save
+  out.names <- c("N","N.est","Harvest","FR","failed","Genetics","K.managed","K.est","K.est.tau","K.true")  
+  # Run parallel code
+  full.results <- foreach(s=1:n.sims,.inorder = TRUE,
+                          .options.snow = opts,.errorhandling = "pass",.export=paste0("strategy.",strategy,".rules"),
+                          .packages=c("mc2d","nimble","abind","tidyverse","stringr")) %dorng% {
+  
+  ### OTHER DATA AND PRIORS
+  # Note: created here so they don't have to be passed to each core
+  
+  # Load posterior distributions for N[2020] and P[detection] and reshape data to long format
+  post <- read.csv("Hihi_AM_posteriors_2020.csv")
+  post.long <- rbind(post %>% select(grep("_F",colnames(post))) %>% gather(Site, Value), # Mean N females 
+                     post %>% select(grep("_D",colnames(post))) %>% gather(Site, Value), # Mean detection
+                     post %>% select(grep("_S",colnames(post))) %>% gather(Site, Value), # Mean SD detection
+                     post %>% select(grep("_a",colnames(post))) %>% gather(Site, Value), # Mean post-release (alpha)
+                     post %>% select(grep("_b",colnames(post))) %>% gather(Site, Value), # Mean post-release (beta)
+                     post %>% select(grep("_T",colnames(post))) %>% gather(Site, Value)) # # Mean post-release (duration)
+  post.long$Variable <- str_sub(post.long$Site, -1, -1) # Name variable (from suffix)
+  post.long$Site <- str_sub(post.long$Site, 1, str_length(post.long$Site)-2) # Name site (removing variable suffix)
+  post.long <- na.omit(post.long) # Remove rows with missing values
+  
+  # ESTIMATED detection parameters for learning model: mean and SD of a.p, mean and SD of re.p
+  # Default: uninformative priors (mean and sd of all posteriors)
+  a.p.mu <- rep(mean(post.long$Value[post.long$Variable=="D"]),n.sites)     # Mean a.p
+  a.p.tau <- rep(sd(post.long$Value[post.long$Variable=="D"]),n.sites)^-2   # Tau a.p
+  sd.p.mu <- rep(mean(post.long$Value[post.long$Variable=="S"]),n.sites)    # Mean sd.p
+  sd.p.tau <- rep(sd(post.long$Value[post.long$Variable=="S"]),n.sites)^-2  # Tau sd.p
+  names(a.p.mu) <- names(a.p.tau) <- names(sd.p.mu) <- names(sd.p.tau) <- site.names
+  # For existing sites, refine prior using available posteriors
+  a.p.mu.ext <- tapply(post.long$Value,list(post.long$Variable,post.long$Site),mean)["D",]  # Mean a.p from posterior
+  a.p.mu[names(a.p.mu.ext)] <- a.p.mu.ext # Replace
+  a.p.tau[names(a.p.mu.ext)] <- tapply(post.long$Value,list(post.long$Variable,post.long$Site),sd)["D",]^-2 # Replace SD a.p from posterior
+  sd.p.mu[names(a.p.mu.ext)] <- tapply(post.long$Value,list(post.long$Variable,post.long$Site),mean)["S",] # Replace mean re.p from posterior
+  sd.p.tau[names(a.p.mu.ext)] <- tapply(post.long$Value,list(post.long$Variable,post.long$Site),sd)["S",]^-2 # Replace SD re.p from posterior
+  
+  # Post-release reduction in survival - cost of release sensu Armstrong et al. 2017
+  post.cor <- post.long %>% filter(Variable %in% c("a","b","T")) %>% pivot_wider(names_from = Variable,values_from = Value,values_fn = list) 
+  post.cor <- post.cor %>% unnest(cols = c(a, b, T)) %>% mutate(phi1=plogis(a+b), phi2=plogis(a)) %>% mutate(COR=(phi1/phi2)^T)
+  # NOTE: COR expressed as survival for use in binomial draw 
+  post.cor$COR <- ifelse(post.cor$COR>=1,1,post.cor$COR) # Truncate at one?
+  
+  # ESTIMATED detection parameters for learning model: mean and SD of a.p, mean and SD of re.p
+  # Default: uninformative priors
+  cor.mu <- rep(mean(tapply(post.cor$COR,list(post.cor$Site),mean)),n.sites)   # Mean COR
+  cor.sd <- rep(mean(tapply(post.cor$COR,list(post.cor$Site),sd)),n.sites)   # SD COR
+  names(cor.mu) <- names(cor.sd) <- site.names
+  # For existing sites, refine prior using available posteriors
+  cor.mu.ext <- tapply(post.cor$COR,list(post.cor$Site),mean)  # Mean a.p from posterior
+  cor.mu[names(cor.mu.ext)] <- cor.mu.ext # Replace
+  cor.sd[names(cor.mu.ext)] <- tapply(post.cor$COR,list(post.cor$Site),sd)^2 # Replace SD a.p from posterior
+  cor.beta <- estBetaParams(cor.mu,cor.sd^2) # Convert all to beta params
+  
+  ### Growth rate - calculated from Wang et al 2010 using arT method (Dillingham et al 2016)
+  rmax.mu.prior <- 0.34 # Underlying true mean
+  rmax.tau.prior <- 0.066^-2 # Uncertainty - on precision scale
+  rmax.sd.process <- c(0.0001,0.1) # Variability - upper and lower bounds of sd
+  
+  ######################
+  ### 3. SIMULATION STORAGE
+  # Most parameters use the same array structure
+  N <- N.est <- N.est.tau <-   # Population sizes (true and estimated)
+    FR <- failed <- # Feeding, site failures
+    K.managed <- # Carrying capacities (realised, depends on feeding) tracked for comparison
+    array(NA,dim=c(n.years+1,n.sites),dimnames=list(as.character(1:(n.years+1)),site.names))
+  K.est <- K.est.tau <- array(NA,dim=c(n.years+1,n.sites,feed.levels),
+                              dimnames=list(as.character(1:(n.years+1)),site.names,1:feed.levels)) # Carrying capacities (estimated)
+  rmax.est <- rmax.est.tau <- rep(NA,dim=n.years) # Maximum growth rates (true and estimated)
+  failed[] <- 0 # Convert failures to the default "0"
+  # Harvest (with a year delay) needs n.years+2
+  Harvest <- Genetics <- FR <- rbind(N,rep(NA,n.sites))
+  
+  ########################################################################################################################
+  ############################################## 4. TRUE AND INITIAL VALUES ##############################################
+  
+  # Note: true and initial values are the same across all strategies
+  
+  # True carrying capacities for all simulations - real fed/unfed values
+  K.true <- array(NA,dim=c(feed.levels,n.sites,n.sims),
+                  dimnames=list(as.character(1:feed.levels,site.names,1:n.sims)))
+  for(i in 1:n.sites){
+    for(f in 1:feed.levels){
+      K.true[f,i,1:n.sims] <- rpert(n.sims, min=K.sites[f,i,1],mode=K.sites[f,i,2],max=K.sites[f,i,3])}
+    for(s in 1:n.sims){
+    # Checks on true carrying capacity:
+    if(site.access[i]=="Remote"){K.true[2,i,s] <- K.true[1,i,s]} # For remote sites, fed=unfed
+    if(K.true[1,i,s]>K.true[2,i,s]){K.true[,i,s] <- rev(K.true[,i,s])} # Unfed always the smaller K
+  }}
+  
+  # TRUE detection parameters for simulation: p and re.p
+  p.mu <- p.re <- matrix(NA,nrow=n.sims,ncol=n.sites)
+  for(i in 1:n.sites){
+    re.name <- ifelse(site.names[i]%in%post.long$Site, #[post.long$Site!="Maunga"]
+                      site.names[i],sample(unique(post.long$Site[post.long$Site!="Maunga"]))) # Use or reuse (except Maungatautari)
+    temp.df <- post.long[post.long$Site==re.name,] # Pick corresponding posterior
+    p.mu[,i] <- sample(temp.df$Value[temp.df$Variable=="D"],n.sims) # Draw true mean p - note logit scale
+    p.re[,i] <- sample(temp.df$Value[temp.df$Variable=="S"],n.sims) # Draw true re.p
+    rm(temp.df)
+  }
+
+  # True COR parameters for simulation
+  true.COR <- matrix(NA,nrow=n.sims,ncol=n.sites)
+  for(i in 1:n.sites){
+    re.name <- ifelse(site.names[i]%in%post.cor$Site,site.names[i],sample(unique(post.cor$Site))) # Use or reuse
+    temp.df <- post.cor[post.cor$Site==re.name,] # Pick corresponding posterior
+    true.COR[,i] <- sample(temp.df$COR,n.sims) # Draw true mean COR
+    rm(temp.df)
+  }
+  
+  # True growth rate
+  # Draw true mean r.max for each simulation from the sampling distribution  
+  r.mu.true <- rnorm(1,mean=rmax.mu.prior,sd=sqrt(1/rmax.tau.prior))
+  # Generate true annual r.max given true mean and process variance
+  rmax.sd.process.true <- runif(1,min(rmax.sd.process),max(rmax.sd.process))
+  rmax.true <- array(rnorm(n.years*n.sites,r.mu.true,rmax.sd.process.true),
+                     dim=c(n.years,n.sites),dimnames=list(as.character(1:n.years),site.names))
+  
+  # Default set to zero for both truth and estimates
+  N[1,] <- N.est[1,] <- 0
+  # Numbers of adult birds in the first year - true values are drawn randomly from posteriors
+  N.post <- post.long %>% filter(Variable=="F") %>% group_by(Site) %>% do(sample_n(.,n.sims,replace=F)) %>% ungroup() %>% select(Site,Value)
+  N.2020 <- matrix(N.post$Value,nrow=n.sims,ncol=length(unique(N.post$Site))); colnames(N.2020) <- unique(N.post$Site)
+  N.2020.Hauturu <- floor(rpert(n.sims,500,1000,1500)) # Values for Hauturu
+  
+  # Estimated values for the first year (mean and precision of the elicited priors = the same for all simulations)
+  # Carrying capacities
+  for(f in 1:feed.levels){
+    K.est[1,,f] <- K.mn.prior[f,]           # Estimated K - mean
+    K.est.tau[1,,f] <- K.mn.tau.prior[f,]   # Estimated K - precision
+  }
+  # Growth rate (estimated - process variability not tracked)
+  rmax.est[1] <- rmax.mu.prior             # Estimated growth rate - mean 
+  rmax.est.tau[1] <- rmax.tau.prior        # Estimated growth rate - precision
+  # Numbers of adult birds in the first year - estimated values are mean and sd of posterior
+  N.est[1,colnames(N.2020)] <- floor(tapply(post.long$Value,list(post.long$Variable,post.long$Site),mean)["F",])
+  N.est.tau[1,colnames(N.2020)] <- tapply(post.long$Value,list(post.long$Variable,post.long$Site),sd)["F",]^-2 # sd to precision
+  N.est[1,site.names=="Hauturu"] <- 1000; N.est.tau[1,site.names=="Hauturu"] <- 190^-2 # # Estimates for Hauturu
+  # Harvest in the first year
+  Harvest[1:2,] <- Genetics[1:2,] <- rep(0,n.sites)
+  # Feeding in the first year - never Hauturu, always all occupied sites
+  FR[1,] <- 1; FR[1,colnames(N.2020)] <- 2
+  
+  ########################################################################################################################
+  ############################################## 5. ADDITIONAL MANAGEMENT THRESHOLDS #####################################
+  
+  max.h <- 20 # maximum number of birds harvested from a single site - FEMALES
+  Tiri.h <- 60 # Set harvest on Tiri for strategies that use a fixed value - FEMALES
+  minN.h <- 40 # Minimum N size to start harvesting a site for strategies with multiple harvests - FEMALES
+  fail.cut <- 3 # Number of birds below which we call failure - FEMALES (N=5)
+  ku.cut <- 19 # K[unfed] cutoff for management
+  kf.cut <- 135 # K[fed] cutoff for topping up a site
+  feed.cut <- 40 # Maximum cutoff for feeding a site - FEMALES
+  N.top <- 40 # Maximum N size for topping up a site - FEMALES
+  drop.p <- 0.75 # minimum drop to restart feeding (proportional - drop BY 0.25)
+  drop.N <- 40 # minimum drop to restart feeding (population size) - FEMALES
+  
+  ##########################################################################################################################
+  ############################################## 6. MAIN SIMULATION BLOCK ##################################################
+  
+  ###################
+  ### RUN SIMULATION
+  
+  # Draw real population size for this simulation run  
+  N[1,colnames(N.2020)] <- N.2020[s,]
+  N[1,site.names=="Hauturu"] <- N.2020.Hauturu[s] # True population size for Hauturu
+  
+  # Create arrays to store the observed population counts for this simulation run
+  n.counts <- rbind(rbinom(n.sites,N[1,], plogis(p.mu+rnorm(n.sites,0,p.re))), # bird counts for first year
+                    matrix(NA,nrow=n.years,ncol=n.sites)) # Empty matrix for following years
+  dimnames(n.counts)=list(as.character(1:(n.years+1)),site.names) # Name columns for sites
+  
+  #############################
+  # STEP 1: demographic process
+  
+  # Realised carrying capacities for the first year (depending on feeding)
+  for(i in 1:n.sites){K.managed[1,i] <- K.true[FR[1,i],i,s]}
+  
+  for(y in 1:(n.years-1)){
+    
+    # Number of individuals is the result of logistic growth, harvest/release and demographic stochasticity
+    for(i in 1:n.sites){
+      # State process (true population sizes)
+      N.real <- N[y,i]+ifelse(Harvest[y,i]>0,rbinom(1,Harvest[y,i],true.COR[s,i]),Harvest[y,i]) # Add or subtract release/harvest
+      growth.temp <- N.real*rmax.true[y,i]*(1-ifelse(K.managed[y,i]==0,0,N.real/K.managed[y,i])) # Growth component of logistic equation
+      overshoot <- ifelse(N.real+growth.temp>0,1,0) # Has population overshot carrying capacity?
+      N[y+1,i] <- rpois(1,(N.real+growth.temp)*overshoot) # Demographic stochasticity
+      # Observation process (counted number of individuals) at site where counting does occur
+      # Generate true probability of detection
+      p.true <- plogis(p.mu[i] + rnorm(1,0,p.re[i]))
+      # Generate actual bird counts (monitoring data)
+      n.counts[y+1,i] <- rbinom(1,N[y+1,i],p.true)
+    } # i (sites)
+    
+    ##########################      
+    # STEP 2: Learning process
+    
+    # Only learn from sites that have ever been occupied, but never from Hauturu
+    if(y==1){learning.sites <- which(N[y,]>0)[-1]}else{learning.sites <- which(colSums(N[1:y,]+Harvest[1:y,]>0)>0)[-1]}
+    
+    # If there are no learning sites, break, otherwise start learning process
+    if(length(learning.sites)>0)
+      
+      # Constants for NIMBLE model
+      hihiConst <- list(
+        # Data
+        n.sites=length(learning.sites),n.years=y+1, Feeding=FR[1:(y+1),learning.sites],
+        # Priors
+        a.p.mu=a.p.mu[learning.sites],a.p.tau=a.p.tau[learning.sites],
+        sd.p.mu=sd.p.mu[learning.sites],sd.p.tau=sd.p.tau[learning.sites],
+        r.mu=rmax.mu.prior,r.tau=rmax.tau.prior,
+        min.sd.r.process=min(rmax.sd.process),max.sd.r.process=max(rmax.sd.process),
+        K.mn.prior=K.mn.prior[,learning.sites],K.mn.tau.prior=K.mn.tau.prior[,learning.sites],
+        p.rel.alpha=cor.beta$alpha[learning.sites],p.rel.beta=cor.beta$beta[learning.sites])
+    # Data for NIMBLE model
+    hihiData <- list(n.counts=n.counts[1:(y+1),learning.sites], # Observed counts at occupied sites
+                     N.init=(N.est[1,learning.sites]+10)/plogis(a.p.mu[learning.sites]), # Estimated initial population sizes
+                     Harvest=Harvest[1:(y+1),learning.sites]) 
+    # Initialize nodes
+    inits <- function(){list(N=n.counts[1:(y+1),learning.sites]+10,
+                             K.mn=K.mn.prior[,learning.sites],
+                             post.rel=cor.mu[learning.sites])} 
+    # Set monitors
+    params=c("N","K.mn","mu.r")
+    # Nimble options (make as silent as possible)
+    nimbleOptions(verbose=FALSE, verboseErrors=FALSE,MCMCprogressBar=FALSE,
+                  MCMCuseConjugacy=FALSE,showCompilerOutput = FALSE,maxContractionsWarning=FALSE)
+    # Build model - NB model code sourced from All_strategies_source script
+    hihiModel <- nimbleModel(code = hihiCode, data = hihiData, constants = hihiConst, inits = inits(), check=FALSE)
+    # Compile model
+    hihiCompiled <- compileNimble(hihiModel)
+    # Sample model
+    hihiSamples <- nimbleMCMC(model=hihiCompiled, monitors = params,
+                              summary=TRUE, niter = ni, nburnin = nb, thin = nt, nchains=nc)
+    
+    # Use NIMBLE estimates to update betas and carrying capacities for sites where we have learned
+    
+    # First, carry over estimates from last year for all sites
+    K.est[y+1,,]=K.est[y,,]; K.est.tau[y+1,,]=K.est.tau[y,,] # Carrying capacity
+    rmax.est[y+1]=rmax.est[y];rmax.est.tau[y+1]=rmax.est.tau[y] # Growth rate
+    N.est[y+1,]=N.est[y,]; N.est.tau[y+1,]=N.est.tau[y,] # Population sizes
+    
+    # Second, update those for sites where learning has occurred 
+    temp.df <- data.frame(hihiSamples$summary$all.chains) # Convert MCMC output to data.frame
+    # Update carrying capacity at different feeding levels
+    K.est[y+1,learning.sites,] <- matrix(unlist(temp.df %>% select(Mean) %>% filter(grepl("K.mn", rownames(temp.df)))),
+                                         ncol=feed.levels,nrow=length(learning.sites),byrow=T) # mean  
+    K.est.tau[y+1,learning.sites,] <- matrix(unlist(temp.df %>% select(St.Dev.) %>% filter(grepl("K.mn", rownames(temp.df)))),
+                                             ncol=feed.levels,nrow=length(learning.sites),byrow=T)^-2 # precision
+    # Update rmax - not used in decisions but tracked to see learning
+    rmax.est[y+1] <- hihiSamples$summary$all.chains["mu.r","Mean"] # mean
+    rmax.est.tau[y+1] <- hihiSamples$summary$all.chains["mu.r","St.Dev."]^-2 # precision
+    # Update population size
+    N.est[2:(y+1),learning.sites] <- matrix(unlist(floor(temp.df %>% select(Mean) %>% filter(grepl("N", rownames(temp.df))))),
+                                            nrow=y+1,ncol=length(learning.sites))[-1,] # mean
+    N.est.tau[2:(y+1),learning.sites] <- matrix(unlist(floor(temp.df %>% select(St.Dev.) %>% filter(grepl("N", rownames(temp.df))))),
+                                                nrow=y+1,ncol=length(learning.sites))[-1,]^-2 # precision
+    # Clean up model objects (can be large)
+    # rm(temp.df,hihiConst,hihiData,hihiModel,hihiCompiled,hihiSamples)
+    
+    ##########################
+    # STEP 3: Decision process
+    
+    # Call decision rule and enter current simulation variables    
+    decision.rule <- do.call(paste0("strategy.",strategy,".rules"),
+                             args=list(yr=y,ns=n.sites,sn=site.names,st=site.type,sa=site.ages,sx=site.access,fl=feed.levels,
+                                       N.est=N.est,Hv=Harvest,FR.1=FR,fk=failed,Gx=Genetics,
+                                       Ke=K.est,Km=K.managed,Kt=K.true[,,s],
+                                       max.Hv=max.h,fk.cut=fail.cut,ku.cut.1=ku.cut,kf.cut.1=kf.cut,feed.cut.1=feed.cut,
+                                       minN.Hv=minN.h,N.top.1=N.top,drop.p.1=drop.p,drop.N.1=drop.N))
+    # Update variables modified by the decision rule    
+    for(i in 1:length(names(decision.rule))){
+      assign(names(decision.rule)[i], decision.rule[[i]])
+    } 
+    
+    #############################
+    # STEP 4: Effects of decision
+    
+    # Simulate carrying capacities for the coming year based on feeding decision
+    for(i in 1:n.sites){K.managed[y+1,i] <- K.true[FR[y+1,i],i,s]}
+    # If there is a new occupied site, add it to the age list to keep track of genetic releases
+    new.entries <- which(is.na(site.ages)&site.names!="Hauturu"&N.est[y+1,]>1)    
+    site.ages[new.entries] <- max(site.ages,na.rm=T)+sample(1:length(new.entries),replace=F)
+  } # y (years)
+  
+  ##########################################
+  # Extract the results for this simulation
+  
+  for(i in 1:length(out.names)){
+    # Cut to n.years (different code depending on array dimensions)
+    if(out.names[i]=="K.true"){assign(paste0(out.names[i]),get(out.names[i]))}
+    if(out.names[i]=="K.est"|out.names[i]=="K.est.tau"){assign(paste0(out.names[i]),get(out.names[i])[1:n.years,,])}
+    if(out.names[i]!="K.est"&out.names[i]!="K.est.tau"&out.names[i]!="K.true"){assign(paste0(out.names[i]),get(out.names[i])[1:n.years,])}
+  }
+  # Combine all results so they can be printed out of the parallel loop
+  all.sims <- vector("list", length=length(out.names));names(all.sims) <- out.names                           
+  for(i in 1:length(out.names)){all.sims[[i]] <- get(paste0(out.names[i]))}  
+  # Print out of parallel loop
+  all.sims
+  } # foreach
+    stopCluster(cl) # Close parallel
+    # Save strategy results as separate object (for multi-strategy runs)
+    results.strategies[[w]] <- full.results
+    # Give update on progress of strategies loop
+    print(paste("Strategy", w, "completed"))
+  } # Strategies
+  
+############################################################################################################################
+########################################## 7.Post-processing of simulation output ##########################################
+
+# Name first-level list elements(strategies)
+names(results.strategies) <- paste0("Strategy.",run.strategies)
+
+# Convert results to arrays for variables N, N.est, Harvest, FR, failed, Genetics, K.managed
+for(i in 1:7){ for(z in 1:n.sims){
+  assign(paste0("all.",out.names[i]),
+         array(as.numeric(unlist(sapply(sapply(results.strategies,"[",1:n.sims),"[",i))),
+               dim=c(n.years,n.sites,n.sims,length(run.strategies))))
+}}
+# Convert results to arrays for variables K.est, K.est.tau
+for(i in 8:9){ for(z in 1:n.sims){
+  assign(paste0("all.",out.names[i]),
+         array(as.numeric(unlist(sapply(sapply(results.strategies,"[",1:n.sims),"[",i))),
+               dim=c(n.years,n.sites,2,n.sims,length(run.strategies))))
+}}
+# Convert results to arrays for variable K.true
+for(i in 10:10){ for(z in 1:n.sims){
+  assign(paste0("all.",out.names[i]),
+         array(as.numeric(unlist(sapply(sapply(results.strategies,"[",1:n.sims),"[",i))),
+               dim=c(feed.levels,n.sites,n.sims,length(run.strategies))))
+}}
+(time.taken.par <- round(Sys.time() - start.time,2)) # End timing
+
+```
