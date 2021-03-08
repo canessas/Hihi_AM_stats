@@ -1,0 +1,170 @@
+Number,Site/Condition,Fed,Site,Expert,Low,Best,High,Conf,Min,Mode,Max,Solved?
+144,Hauturu - U,U,Hauturu,Doug,500,1000,3000,95,387,1000,4412,yes
+145,Hauturu - U,U,Hauturu,Kevin,500,1500,6000,100,500,1500,6000,NA
+146,Hauturu - U,U,Hauturu,Lynn,600,1500,6000,100,600,1500,6000,NA
+147,Hauturu - U,U,Hauturu,Troy,550,2800,4200,95,-626,2800,4651,yes
+148,Hauturu - U,U,Hauturu,Neil,500,2500,5000,95,-237,2500,6162,yes
+149,Hauturu - U,U,Hauturu,John,500,1200,2500,100,500,1200,2500,NA
+150,Hauturu - U,U,Hauturu,Mhairi,400,1500,3000,100,400,1500,3000,NA
+49,Bushy - F,F,Bushy,Doug,30,200,400,95,-35,200,490,yes
+50,Bushy - F,F,Bushy,Kevin,100,180,360,95,78,180,467,yes
+51,Bushy - F,F,Bushy,Lynn,50,100,200,100,50,100,200,NA
+52,Bushy - F,F,Bushy,Troy,90,160,210,95,56,160,227,yes
+53,Bushy - F,F,Bushy,Neil,50,100,150,90,20,100,181,yes
+54,Bushy - F,F,Bushy,John,100,130,250,100,100,130,250,NA
+55,Bushy - F,F,Bushy,Mhairi,80,140,150,95,34,140,152,yes
+56,Bushy - F,F,Bushy,Kate,80,100,180,95,75,100,236,yes
+57,Bushy - U,U,Bushy,Doug,0,0,30,95,0,0,67,yes
+58,Bushy - U,U,Bushy,Kevin,0,20,60,95,0,20,96,yes
+59,Bushy - U,U,Bushy,Lynn,4,0,10,100,4,0,10,NA
+60,Bushy - U,U,Bushy,Troy,0,45,90,95,0,45,123,yes
+61,Bushy - U,U,Bushy,Neil,0,0,30,90,0,0,81,yes
+62,Bushy - U,U,Bushy,John,10,50,100,100,10,50,100,NA
+63,Bushy - U,U,Bushy,Mhairi,15,40,50,95,0,40,53,yes
+64,Bushy - U,U,Bushy,Kate,0,0,40,95,0,0,89,yes
+151,Cuvier - U,U,Cuvier,Doug,0,30,100,100,0,30,100,NA
+152,Cuvier - U,U,Cuvier,Kevin,0,10,100,100,0,10,100,NA
+153,Cuvier - U,U,Cuvier,Lynn,0,20,80,100,0,20,80,NA
+154,Cuvier - U,U,Cuvier,Troy,0,0,90,95,0,0,200,yes
+155,Cuvier - U,U,Cuvier,Neil,0,20,60,95,0,20,96,yes
+156,Cuvier - U,U,Cuvier,John,5,20,80,100,5,20,80,NA
+157,Cuvier - U,U,Cuvier,Mhairi,0,30,50,95,0,30,63,yes
+130,Kapiti- F,F,Kapiti,Doug,150,200,400,95,139,200,541,yes
+131,Kapiti- F,F,Kapiti,Kevin,100,200,270,100,100,200,270,NA
+132,Kapiti- F,F,Kapiti,Lynn,160,170,180,100,160,170,180,NA
+133,Kapiti- F,F,Kapiti,Troy,144,240,480,95,119,240,629,yes
+134,Kapiti- F,F,Kapiti,Neil,120,200,300,95,91,200,347,yes
+135,Kapiti- F,F,Kapiti,John,180,200,300,100,180,200,300,NA
+136,Kapiti- F,F,Kapiti,Mhairi,160,200,300,95,150,200,362,yes
+137,Kapiti- U,U,Kapiti,Doug,0,20,40,95,0,20,54,yes
+138,Kapiti- U,U,Kapiti,Kevin,10,20,30,100,10,20,30,NA
+139,Kapiti- U,U,Kapiti,Lynn,0,0,40,100,0,0,40,NA
+140,Kapiti- U,U,Kapiti,Troy,0,0,48,95,0,0,106,yes
+141,Kapiti- U,U,Kapiti,Neil,20,30,50,95,17,30,61,yes
+142,Kapiti- U,U,Kapiti,John,10,20,40,100,10,20,40,NA
+143,Kapiti- U,U,Kapiti,Mhairi,15,40,50,95,0,40,53,yes
+81,Karori - F,F,Karori,Doug,75,200,400,100,75,200,400,NA
+82,Karori - F,F,Karori,Kevin,100,170,300,95,79,170,372,yes
+83,Karori - F,F,Karori,Lynn,100,180,280,100,100,180,280,NA
+84,Karori - F,F,Karori,Troy,135,240,340,95,90,240,380,yes
+85,Karori - F,F,Karori,Neil,100,200,350,100,100,200,350,NA
+86,Karori - F,F,Karori,John,100,130,220,100,100,130,220,NA
+87,Karori - F,F,Karori,Mhairi,100,150,200,95,79,150,221,yes
+88,Karori - U,U,Karori,Doug,0,0,0,100,0,0,0,NA
+89,Karori - U,U,Karori,Kevin,0,0,40,95,0,0,89,yes
+90,Karori - U,U,Karori,Lynn,0,20,80,100,0,20,80,NA
+91,Karori - U,U,Karori,Troy,0,0,0,95,0,0,0,yes
+92,Karori - U,U,Karori,Neil,0,25,50,100,0,25,50,NA
+93,Karori - U,U,Karori,John,10,30,70,100,10,30,70,NA
+94,Karori - U,U,Karori,Mhairi,0,20,45,95,0,20,64,yes
+17,Maunga-F,F,Maunga,Doug,0,100,3000,95,0,100,6439,yes
+18,Maunga-F,F,Maunga,Kevin,60,300,3000,100,60,300,3000,NA
+19,Maunga-F,F,Maunga,Lynn,200,400,2500,100,200,400,2500,NA
+20,Maunga-F,F,Maunga,Troy,1200,2400,6000,80,223,2400,10698,yes
+21,Maunga-F,F,Maunga,Neil,400,700,2000,90,278,700,3268,yes
+22,Maunga-F,F,Maunga,John,700,1000,3000,100,700,1000,3000,NA
+23,Maunga-F,F,Maunga,Mhairi,100,750,1000,95,-308,750,1064,yes
+24,Maunga-F,F,Maunga,Kate,200,1000,1800,95,-132,1000,2132,yes
+25,Maunga-U,U,Maunga,Doug,0,0,1000,95,0,0,2219,yes
+26,Maunga-U,U,Maunga,Kevin,0,40,1000,100,0,40,1000,NA
+27,Maunga-U,U,Maunga,Lynn,0,30,500,100,0,30,500,NA
+28,Maunga-U,U,Maunga,Troy,50,850,1400,80,-821,850,1884,yes
+29,Maunga-U,U,Maunga,Neil,50,200,500,90,-19,200,740,yes
+30,Maunga-U,U,Maunga,John,50,200,1000,100,50,200,1000,NA
+31,Maunga-U,U,Maunga,Mhairi,20,70,250,95,8,70,374,yes
+32,Maunga-U,U,Maunga,Kate,0,50,1500,95,0,50,3219,yes
+95,Moko - F,F,Moko,Doug,0,40,200,100,0,40,200,NA
+96,Moko - F,F,Moko,Kevin,40,60,80,95,32,60,88,yes
+97,Moko - F,F,Moko,Lynn,0,40,120,100,0,40,120,NA
+98,Moko - F,F,Moko,Troy,60,140,200,95,22,140,221,yes
+99,Moko - F,F,Moko,Neil,30,50,100,95,25,50,131,yes
+100,Moko - F,F,Moko,John,20,30,100,100,20,30,100,NA
+101,Moko - F,F,Moko,Mhairi,50,80,100,95,35,80,107,yes
+102,Moko - U,U,Moko,Doug,0,0,0,100,0,0,0,NA
+103,Moko - U,U,Moko,Kevin,0,0,20,95,0,0,44,yes
+104,Moko - U,U,Moko,Lynn,0,0,20,100,0,0,20,NA
+105,Moko - U,U,Moko,Troy,0,0,0,95,0,0,0,yes
+106,Moko - U,U,Moko,Neil,0,0,20,95,0,0,44,yes
+107,Moko - U,U,Moko,John,0,0,10,100,0,0,10,NA
+108,Moko - U,U,Moko,Mhairi,0,0,20,95,0,0,44,yes
+33,Rotok -F,F,Rotok,Doug,0,250,600,95,0,250,882,yes
+34,Rotok -F,F,Rotok,Kevin,100,300,400,95,-14,300,429,yes
+35,Rotok -F,F,Rotok,Lynn,150,250,350,100,150,250,350,NA
+36,Rotok -F,F,Rotok,Troy,200,340,440,90,102,340,493,yes
+37,Rotok -F,F,Rotok,Neil,100,200,350,95,67,200,426,yes
+38,Rotok -F,F,Rotok,John,150,250,500,100,150,250,500,NA
+39,Rotok -F,F,Rotok,Mhairi,150,300,350,95,52,300,362,yes
+40,Rotok -F,F,Rotok,Kate,160,200,350,95,151,200,454,yes
+41,Rotok - U,U,Rotok,Doug,0,0,100,95,0,0,222,yes
+42,Rotok - U,U,Rotok,Kevin,0,20,60,95,0,20,96,yes
+43,Rotok - U,U,Rotok,Lynn,0,30,100,100,0,30,100,NA
+44,Rotok - U,U,Rotok,Troy,0,50,100,90,0,50,158,yes
+45,Rotok - U,U,Rotok,Neil,30,100,150,95,-4,100,167,yes
+46,Rotok - U,U,Rotok,John,20,80,250,100,20,80,250,NA
+47,Rotok - U,U,Rotok,Mhairi,35,80,100,95,8,80,105,yes
+48,Rotok - U,U,Rotok,Kate,0,0,40,95,0,0,89,yes
+109,Rotor - F,F,Rotor,Doug,0,6,20,100,0,6,20,NA
+110,Rotor - F,F,Rotor,Kevin,6,10,20,100,6,10,20,NA
+111,Rotor - F,F,Rotor,Lynn,0,0,20,100,0,0,20,NA
+112,Rotor - F,F,Rotor,Troy,0,10,30,95,0,10,48,yes
+113,Rotor - F,F,Rotor,Neil,0,10,30,100,0,10,30,NA
+114,Rotor - F,F,Rotor,John,0,5,15,100,0,5,15,NA
+115,Rotor - F,F,Rotor,Mhairi,0,4,10,100,0,4,10,NA
+116,Rotor - U,U,Rotor,Doug,0,0,0,100,0,0,0,NA
+117,Rotor - U,U,Rotor,Kevin,0,0,0,100,0,0,0,NA
+118,Rotor - U,U,Rotor,Lynn,0,0,0,100,0,0,0,NA
+119,Rotor - U,U,Rotor,Troy,0,0,0,100,0,0,0,NA
+120,Rotor - U,U,Rotor,Neil,0,0,0,100,0,0,0,NA
+121,Rotor - U,U,Rotor,John,0,0,0,100,0,0,0,NA
+122,Rotor - U,U,Rotor,Mhairi,0,0,0,100,0,0,0,NA
+130,Shakespear - U,U,Shake,Kev,0,18,30,80,0,18,33,NA
+130,Shakespear - U,U,Shake,Kate,0,0,0,95,0,0,0,NA
+130,Shakespear - U,U,Shake,Matt,30,60,80,60,10,60,93,NA
+130,Shakespear - U,U,Shake,John,8,25,45,80,4,25,50,NA
+130,Shakespear - U,U,Shake,Mhairi,6,15,30,95,6,15,31,NA
+130,Shakespear - U,U,Shake,Bruce,10,20,30,60,3,20,37,NA
+130,Shakespear - F,F,Shake,Kev,40,100,200,95,37,100,205,NA
+130,Shakespear - F,F,Shake,Kate,40,75,102,95,38,75,103,NA
+130,Shakespear - F,F,Shake,Matt,80,160,220,80,60,160,235,NA
+130,Shakespear - F,F,Shake,John,50,100,175,80,38,100,194,NA
+130,Shakespear - F,F,Shake,Mhairi,75,120,200,95,73,120,204,NA
+130,Shakespear - F,F,Shake,Bruce,100,150,200,90,94,150,206,NA
+123,Tara - U,U,Tara,Doug,0,40,400,95,0,40,803,yes
+124,Tara - U,U,Tara,Kevin,0,100,300,100,0,100,300,NA
+125,Tara - U,U,Tara,Lynn,10,80,400,100,10,80,400,NA
+126,Tara - U,U,Tara,Troy,0,0,330,95,0,0,732,yes
+127,Tara - U,U,Tara,Neil,0,80,500,95,0,80,945,yes
+128,Tara - U,U,Tara,John,20,60,250,100,20,60,250,NA
+129,Tara - U,U,Tara,Mhairi,10,45,200,95,2,45,312,yes
+65,Tawh - F,F,Tawh,Doug,50,200,400,95,-3,200,496,yes
+66,Tawh - F,F,Tawh,Kevin,60,100,200,95,50,100,262,yes
+67,Tawh - F,F,Tawh,Lynn,110,160,260,100,110,160,260,NA
+68,Tawh - F,F,Tawh,Troy,80,180,200,95,6,180,204,yes
+69,Tawh - F,F,Tawh,Neil,100,150,250,95,86,150,307,yes
+70,Tawh - F,F,Tawh,John,180,240,350,100,180,240,350,NA
+71,Tawh - F,F,Tawh,Mhairi,150,200,275,95,133,200,313,yes
+72,Tawh - F,F,Tawh,Kate,80,100,150,95,75,100,181,yes
+73,Tawh - U,U,Tawh,Doug,0,0,20,95,0,0,44,yes
+74,Tawh - U,U,Tawh,Kevin,0,0,40,95,0,0,89,yes
+75,Tawh - U,U,Tawh,Lynn,0,0,80,100,0,0,80,NA
+76,Tawh - U,U,Tawh,Troy,0,0,0,95,0,0,0,yes
+77,Tawh - U,U,Tawh,Neil,5,30,80,95,-2,30,109,yes
+78,Tawh - U,U,Tawh,John,5,15,50,100,5,15,50,NA
+79,Tawh - U,U,Tawh,Mhairi,0,25,45,95,0,25,58,yes
+80,Tawh - U,U,Tawh,Kate,0,0,20,95,0,0,44,yes
+1,Tiri-F,F,Tiri,Doug,120,180,400,100,120,180,400,NA
+2,Tiri-F,F,Tiri,Kevin,120,210,270,100,120,210,270,NA
+3,Tiri-F,F,Tiri,Lynn,110,160,280,100,110,160,280,NA
+4,Tiri-F,F,Tiri,Troy,160,220,280,100,160,220,280,NA
+5,Tiri-F,F,Tiri,Neil,140,200,280,100,140,200,280,NA
+6,Tiri-F,F,Tiri,John,180,240,350,100,180,240,350,NA
+7,Tiri-F,F,Tiri,Mhairi,140,180,250,100,140,180,250,NA
+8,Tiri-F,F,Tiri,Kate,140,190,230,100,140,190,230,NA
+9,Tiri-U,U,Tiri,Doug,0,0,40,100,0,0,40,NA
+10,Tiri-U,U,Tiri,Kevin,0,20,40,100,0,20,40,NA
+11,Tiri-U,U,Tiri,Lynn,0,0,40,100,0,0,40,NA
+12,Tiri-U,U,Tiri,Troy,0,0,10,95,0,0,22,yes
+13,Tiri-U,U,Tiri,Neil,0,0,40,95,0,0,89,yes
+14,Tiri-U,U,Tiri,John,0,15,40,100,0,15,40,NA
+15,Tiri-U,U,Tiri,Mhairi,0,15,40,95,0,15,61,yes
+16,Tiri-U,U,Tiri,Kate,0,0,25,100,0,0,25,NA
