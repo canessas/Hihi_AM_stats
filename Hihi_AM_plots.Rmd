@@ -22,7 +22,7 @@ strategy.names <- factor(strategy.names,levels=unique(strategy.names))
 fig2.df <- rbind(
   # Total final population size for each strategy (not counting Hauturu)
   data.frame(Strategy=strategy.names,
-             Variable=rep(paste0("Total birds at t=",n.years),length(run.strategies)),
+             Variable=rep(paste0("Total N[f] at t=",n.years),length(run.strategies)),
              Mean=apply(colSums(all.N[n.years,-1,,]),2,mean),
              Lci=apply(colSums(all.N[n.years,-1,,]),2,quantile,probs=0.025),
              Uci=apply(colSums(all.N[n.years,-1,,]),2,quantile,probs=0.975)),
@@ -52,7 +52,7 @@ fig2.df <- rbind(
 # Make plot: error bar or distributions, faceted by metric, grouped by action
 library(ggplot2);library(RColorBrewer);library(grid);library(Cairo);library(Manu)
 my.cols <- get_pal("Hihi") #brewer.pal(7, "Set1") # One colour for each action
-cairo_pdf(file="Hihi_AM_plots/Fig_2_summaries.pdf",width=120/25.4, height=90/25.4, pointsize=5,antialias = "subpixel")
+cairo_pdf(file="Fig_2_summaries.pdf",width=120/25.4, height=90/25.4, pointsize=5,antialias = "subpixel")
 ggplot(fig2.df,aes(y=Mean,x=Strategy,group=Strategy))+
   geom_point(position=position_dodge(width=0.5),size=0.7)+
   geom_errorbar(aes(ymin=Lci,ymax=Uci,group=Strategy),
@@ -137,7 +137,7 @@ for(w in 1:length(run.strategies)){
     scale_y_continuous(name="Population size")+
     scale_x_continuous(name="Year",limits=c(1,n.years),expand=c(0,0))
   
-  cairo_pdf(file=paste0("Hihi_AM_plots/Fig_3_time_N_s", w, ".pdf"),width=110/25.4, height=110/25.4, pointsize=5,antialias = "subpixel")
+  cairo_pdf(file=paste0("Fig_3_time_N_s", w, ".pdf"),width=110/25.4, height=110/25.4, pointsize=5,antialias = "subpixel")
   print(N.plots[[w]])
   dev.off()
   
@@ -160,7 +160,7 @@ for(w in 1:length(run.strategies)){
           plot.margin=unit(c(3,3,3,1), "mm"))+
     scale_y_continuous(name="Birds translocated",limits=c(range(fig3.df$Harvest)),expand=c(0,0))+
     scale_x_continuous(name="Year",limits=c(1,n.years),expand=c(0,0))
-  cairo_pdf(file=paste0("Hihi_AM_plots/Fig_3_time_Harvest_s", w, ".pdf"),width=110/25.4, height=110/25.4, pointsize=5,antialias = "subpixel")
+  cairo_pdf(file=paste0("Fig_3_time_Harvest_s", w, ".pdf"),width=110/25.4, height=110/25.4, pointsize=5,antialias = "subpixel")
   print(H.plots[[w]])
   dev.off()
   
@@ -183,7 +183,7 @@ for(w in 1:length(run.strategies)){
           plot.margin=unit(c(3,3,3,1), "mm"))+
     scale_y_continuous(name="Frequency of feeding",limits=c(0,1),breaks=c(0,0.5,1),expand=c(0,0))+
     scale_x_continuous(name="Year",limits=c(1,n.years),expand=c(0,0))
-  cairo_pdf(file=paste0("Hihi_AM_plots/Fig_3_time_Feeding_s", w, ".pdf"),width=110/25.4, height=110/25.4, pointsize=5,antialias = "subpixel")
+  cairo_pdf(file=paste0("Fig_3_time_Feeding_s", w, ".pdf"),width=110/25.4, height=110/25.4, pointsize=5,antialias = "subpixel")
   print(F.plots[[w]])
   dev.off()
 
@@ -200,7 +200,7 @@ rm(list=c("dat","N.plots","H.plots","F.plots")) # Clean up
 fig4.df <- rbind(
 # Number of birds per year
   data.frame(Year=rep(1:n.years,length(run.strategies)),
-             Variable=factor(rep(paste0("Total birds at t=",n.years),n.years*length(run.strategies))),
+             Variable=factor(rep(paste0("Total N[f] at t=",n.years),n.years*length(run.strategies))),
              Strategy=factor(rep(strategy.names,each=n.years)),
              Mean=as.numeric(apply(apply(all.N[,-1,,],c(1,3,4),sum),c(1,3),mean)),
              Lci=as.numeric(apply(apply(all.N[,-1,,],c(1,3,4),sum),c(1,3),quantile,probs=0.025)),
@@ -221,26 +221,24 @@ fig4.df <- rbind(
              Uci=as.numeric(apply(apply(all.N,c(3,4),function(x)rowSums(x>0)),c(1,3),quantile,probs=0.975))),
   # Number of feeding interventions required per year
   data.frame(Year=rep(1:n.years,length(run.strategies)),
-             Variable=factor(rep(paste0("Fed sites at t=",n.years),n.years*length(run.strategies))),
+             Variable=factor(rep(paste0("Feeding years at t=",n.years),n.years*length(run.strategies))),
              Strategy=factor(rep(strategy.names,each=n.years)),
              Mean=as.numeric(apply(apply(all.FR,c(1,3,4),sum),c(1,3),mean)),
              Lci=as.numeric(apply(apply(all.FR,c(1,3,4),sum),c(1,3),quantile,probs=0.025)),
              Uci=as.numeric(apply(apply(all.FR,c(1,3,4),sum),c(1,3),quantile,probs=0.975)))
 )
-fig4.df$Variable <- factor(fig4.df$Variable,
-                           levels=c("N of populations at t=20","Total birds at t=20","Cumulative costs at t=20","Fed sites at t=20"))
+# Order factor levels for plot quadrants
+fig4.df$Variable <- factor(fig4.df$Variable,levels=levels(fig4.df$Variable)[c(1,3,2,4)])
 
 # Make plot: mean curves or ribbons, faceted by metric, grouped by action
 library(ggplot2);library(RColorBrewer);library(grid);library(Cairo);library(ggrepel)
 my.cols <- get_pal("Hihi") #brewer.pal(7, "Set1") # One colour for each action
-cairo_pdf(file="Hihi_AM_plots/Fig_4_cumulative.pdf",width=120/25.4, height=90/25.4, pointsize=5,antialias = "subpixel")
+cairo_pdf(file="Fig_4_cumulative.pdf",width=120/25.4, height=90/25.4, pointsize=5,antialias = "subpixel")
 ggplot(fig4.df,aes(y=Mean,x=Year,group=Strategy))+
   geom_line(size=0.7)+
   geom_text_repel(data=subset(fig4.df,Year==n.years),segment.color="red",
                   size=2,segment.alpha=0.5,segment.size=0.5,
                   aes(label=as.numeric(Strategy),x=Year+0.1),nudge_x=15)+ 
-  # CHECK GEOM_TEXT_REPEL
-  # geom_ribbon(aes(ymin=Lci,ymax=Uci,group=Strategy),stat="identity",alpha=0.5)+
   facet_wrap(~Variable,scales="free",ncol=2)+
   theme_bw()+
   theme(legend.position='none',
@@ -274,9 +272,8 @@ dev.off()
 
 ########################################################################
 ### Figure 5: learning over time for all objectives under all strategies
-# Choose strategies 1, 3, 4 (status quo, seasonal, new learning)
-# Choose sites 2, 6, 11 (Bushy, Tiri, ...)
-which.strategies <- c(1,2) #run.strategies #c(1,4,5)
+# Choose strategies and sites to plot
+which.strategies <- run.strategies #c(1,4,5)
 which.sites <- which(site.names%in%site.names[c(2,4,6,13)])
 
 # Strategy names for visualization
