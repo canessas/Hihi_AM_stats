@@ -26,12 +26,12 @@ if(send.email==TRUE){create_smtp_creds_key(id="hotmail",host="smtp.live.com",
 # NIMBLE: 7x1x20x1000 = 4.65 hrs
 max.cores <- detectCores(logical=FALSE)
 n.reps <- 3 # n.sims is a multiple of n.cores: how many simulations per core?
-n.sims <- (max.cores-1)*n.reps; n.years <- 10; feed.levels <- 2 # Simulation settings 
-ni <- 1000; nb <- 500; nt <- 1; nc <- 3 # MCMC settings
+n.sims <- (max.cores-1)*n.reps; n.years <- 20; feed.levels <- 2 # Simulation settings 
+ni <- 10000; nb <- 5000; nt <- 5; nc <- 3 # MCMC settings
 this.seed <- 123
 
 # Which strategies to run?
-run.strategies <- c(1,2,5,7)
+run.strategies <- 1:7
 results.strategies <- list()
 
 ########################################################################################################################
@@ -120,7 +120,7 @@ K.mn.tau.prior[K.mn.prior==0] <- 1 # Avoid errors
 
 for(w in 1:length(run.strategies)){
 strategy <- run.strategies[w]
-set.seed(123) # Change or fix for stochasticity among strategies
+# set.seed(this.seed) # Change or fix for stochasticity among strategies
 
   # Create parallel structure
   cl <- makeCluster(max.cores-1)
@@ -460,6 +460,42 @@ for(i in 10:10){ for(z in 1:n.sims){
          array(as.numeric(unlist(sapply(sapply(results.strategies,"[",1:n.sims),"[",i))),
                dim=c(feed.levels,n.sites,n.sims,length(run.strategies))))
 }}
+
+#################
+# Calculate costs
+
+# Matrices with site characteristics (eases calculation)
+access.mat <- matrix(site.access,nrow=n.years,ncol=n.sites,byrow=T) # Site access
+ranger.mat <- matrix(c(0,rep(1,n.sites-1)),nrow=n.years,ncol=n.sites,byrow=T) # Site access
+bellbird.mat <- matrix(c(0,1,1,1,1,0,0,0,1,1,1,0,1),nrow=n.years,ncol=n.sites,byrow=T) # Bellbird presence
+vehicle.mat <- matrix(c(0,0,0,0,1,1,0,0,0,0,0,0,0),nrow=n.years,ncol=n.sites,byrow=T) # Bellbird presence
+
+all.Costs <- array(NA, dim=dim(all.N))
+for(i in 1:dim(all.N)[3]){for(j in 1:dim(all.N)[4]){
+  
+  all.Costs[,,i,j] <-
+# Cost of site maintenance:
+  (all.N.est[,,i,j]>0)*ranger.mat*36400 + # Cost of each occupied site(ranger)
+  (all.N.est[,,i,j]>0&all.FR[,,i,j]==2)*(11492+9100) + # Cost of each fed site - breeding  + off season (volunteer)
+  (all.N.est[,,i,j]>0&all.FR[,,i,j]==2)*ifelse(bellbird.mat==0,128,1920) + # Cost of sugar depending on bellbird presence
+  (all.N.est[,,i,j]>0&all.FR[,,i,j]==2)*vehicle.mat*60 + # Cost of vehicle where required
+# Cost of translocation:
+  (all.Harvest[,,i,j]!=0)*(access.mat=="Reach")*30000 + # Cost of translocation from/to easily reached sites ("Reach")
+  (all.Harvest[,,i,j]!=0)*(access.mat=="Remote")*60000 + # Cost of translocation from/to remote sites ("Remote")
+  (all.Harvest[,,i,j]!=0)*17500 + # Volunteer team for each translocation
+# At first release at new site:
+  (all.N.est[,,i,j]==0&all.Harvest[,,i,j]>0)*1600 + # Add nest boxes
+  (all.N.est[,,i,j]==0&all.Harvest[,,i,j]>0&all.FR[,,i,j]==2)*4000 # Add feeding cages if site fed
+  
+}}
+
+# Other costs still to be included
+# 320 # New nest boxes every 5 years
+# 72800 # Cost of National officer
+
+# questions: are translocation double counted?
+# question: are nest boxes used at all sites?
+
 (time.taken.par <- round(Sys.time() - start.time,2)) # End timing
 
 ```
