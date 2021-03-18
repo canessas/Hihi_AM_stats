@@ -26,12 +26,12 @@ if(send.email==TRUE){create_smtp_creds_key(id="hotmail",host="smtp.live.com",
 # NIMBLE: 7x1x20x1000 = 4.65 hrs
 max.cores <- detectCores(logical=FALSE)
 n.reps <- 3 # n.sims is a multiple of n.cores: how many simulations per core?
-n.sims <- (max.cores-1)*n.reps; n.years <- 20; feed.levels <- 2 # Simulation settings 
+n.sims <- (max.cores-1)*n.reps; n.years <- 3; feed.levels <- 2 # Simulation settings 
 ni <- 10000; nb <- 5000; nt <- 5; nc <- 3 # MCMC settings
 this.seed <- 123
 
 # Which strategies to run?
-run.strategies <- 1:7
+run.strategies <- 1:1
 results.strategies <- list()
 
 ########################################################################################################################
@@ -62,17 +62,17 @@ site.ages.orig <- all.sites$Age[which.sites.orig]
 ### CARRYING CAPACITIES
 # Load elicited values
 K.orig <- abind(
-tapply(final.K$Min,list(final.K$Site,final.K$Fed),mean),  # Min
-tapply(final.K$Mode,list(final.K$Site,final.K$Fed),mean), # Mode
-tapply(final.K$Max,list(final.K$Site,final.K$Fed),mean),  # Max
-along=3
+  tapply(final.K$Min,list(final.K$Site,final.K$Fed),mean),  # Min
+  tapply(final.K$Mode,list(final.K$Site,final.K$Fed),mean), # Mode
+  tapply(final.K$Max,list(final.K$Site,final.K$Fed),mean),  # Max
+  along=3
 )
 # Priors for selected initial sites
 K.sites.orig <- abind(
-Min=rbind(Unfed=K.orig[which.sites.orig,2,1],Fed=K.orig[which.sites.orig,1,1]),  # Min
-Mode=rbind(Unfed=K.orig[which.sites.orig,2,2],Fed=K.orig[which.sites.orig,1,2]), # Mode
-Max=rbind(Unfed=K.orig[which.sites.orig,2,3],Fed=K.orig[which.sites.orig,1,3]),  # Max
-along=3
+  Min=rbind(Unfed=K.orig[which.sites.orig,2,1],Fed=K.orig[which.sites.orig,1,1]),  # Min
+  Mode=rbind(Unfed=K.orig[which.sites.orig,2,2],Fed=K.orig[which.sites.orig,1,2]), # Mode
+  Max=rbind(Unfed=K.orig[which.sites.orig,2,3],Fed=K.orig[which.sites.orig,1,3]),  # Max
+  along=3
 )
 K.sites.orig[K.sites.orig<0] <- 0 # Truncate lower bound of the rescaled distribution
 # Fill missing values to avoid error messages (Hauturu, Cuvier, Taranga) - these values are not used in the sim
@@ -80,7 +80,7 @@ K.sites.orig[2,which(site.names.orig=="Hauturu"),] <- K.sites.orig[1,which(site.
 K.sites.orig[2,which(site.names.orig=="Cuvier"),] <- K.sites.orig[1,which(site.names.orig=="Cuvier"),] # Cuvier
 K.sites.orig[2,which(site.names.orig=="Tara"),] <- K.sites.orig[1,which(site.names.orig=="Tara"),] # Taranga
 # Fix Rotoroa unfed - avoid the all-zero distribution which sometimes leads to JAGS failure
-K.sites.orig[1,which(site.names.orig=="Rotor"),] <- c(0,1,2) # Rotoroa
+K.sites.orig[1,which(site.names.orig=="Rotor"),] <- c(0,0,1) # Rotoroa
 # Apply sex ratio to all sites (elicited values are both sexes)
 K.sites.orig <- round(K.sites.orig/2,0)
 
@@ -91,19 +91,19 @@ site.names.new[site.type.new=="Island"] <- paste0(site.type.new[site.type.new=="
 site.names.new[site.type.new=="Mainland"] <- paste0(site.type.new[site.type.new=="Mainland"],1:sum(site.type.new=="Mainland"))
 K.nf.temp <- runif(n.sites.new,1,100); K.f.temp <- K.nf.temp*runif(n.sites.new,2,10) # Generate mode values
 K.sites.new <- abind(
-Min=rbind(Unfed=K.nf.temp,Fed=K.f.temp)*runif(n.sites.new,0.5,0.9), # Min - defined as random proportion of mode
-Mode=rbind(Unfed=K.nf.temp,Fed=K.f.temp),                           # Mode
-Max=rbind(Unfed=K.nf.temp,Fed=K.f.temp)*runif(n.sites.new,1.1,1.5), # Max - defined as random proportion of mode
-along=3
+  Min=rbind(Unfed=K.nf.temp,Fed=K.f.temp)*runif(n.sites.new,0.5,0.9), # Min - defined as random proportion of mode
+  Mode=rbind(Unfed=K.nf.temp,Fed=K.f.temp),                           # Mode
+  Max=rbind(Unfed=K.nf.temp,Fed=K.f.temp)*runif(n.sites.new,1.1,1.5), # Max - defined as random proportion of mode
+  along=3
 )
 colnames(K.sites.new) <- site.names.new
 
 # Bind original and new sites
 K.sites <- abind(
-cbind(K.sites.orig[,,1],K.sites.new[,,1]),
-cbind(K.sites.orig[,,2],K.sites.new[,,2]),
-cbind(K.sites.orig[,,3],K.sites.new[,,3]),
-along=3
+  cbind(K.sites.orig[,,1],K.sites.new[,,1]),
+  cbind(K.sites.orig[,,2],K.sites.new[,,2]),
+  cbind(K.sites.orig[,,3],K.sites.new[,,3]),
+  along=3
 )
 site.names <- colnames(K.sites);n.sites <- length(site.names)
 site.ages <- c(site.ages.orig,rep(NA,n.sites.new))
@@ -111,12 +111,12 @@ site.ages <- c(site.ages.orig,rep(NA,n.sites.new))
 # Get means and precision to define the JAGS model's priors
 K.mn.prior <- K.mn.tau.prior <- array(NA,dim=c(2,ncol(K.sites)),dimnames=list(c("Unfed","Fed"),site.names))
 for(i in 1:ncol(K.sites)){
-for(j in 1:2){
-K.mn.prior[j,i] <- mean(rpert(10000,min=K.sites[j,i,1],mode=K.sites[j,i,2],max=K.sites[j,i,3]),na.rm=TRUE)      # Mean
-K.mn.tau.prior[j,i] <- sd(rpert(10000,min=K.sites[j,i,1],mode=K.sites[j,i,2],max=K.sites[j,i,3]),na.rm=TRUE)^-2 # Precision
+  for(j in 1:2){
+    K.mn.prior[j,i] <- mean(rpert(10000,min=K.sites[j,i,1],mode=K.sites[j,i,2],max=K.sites[j,i,3]),na.rm=TRUE)      # Mean
+    K.mn.tau.prior[j,i] <- sd(rpert(10000,min=K.sites[j,i,1],mode=K.sites[j,i,2],max=K.sites[j,i,3]),na.rm=TRUE)^-2 # Precision
+  }
 }
-}
-K.mn.tau.prior[K.mn.prior==0] <- 1 # Avoid errors
+K.mn.tau.prior[K.mn.prior==0|K.mn.tau.prior==Inf] <- 1 # Avoid errors
 
 for(w in 1:length(run.strategies)){
 strategy <- run.strategies[w]
@@ -248,10 +248,11 @@ strategy <- run.strategies[w]
     
     # Default set to zero for both truth and estimates
     N[1,] <- N.est[1,] <- 0
-    # Numbers of adult birds in the first year - true values are drawn randomly from posteriors
+    # Numbers of adult birds in the first year - true values are drawn randomly from posteriors (except Hauturu, see below)
     N.post <- post.long %>% filter(Variable=="F") %>% group_by(Site) %>% do(sample_n(.,n.sims,replace=F)) %>% ungroup() %>% select(Site,Value)
     N.2020 <- matrix(N.post$Value,nrow=n.sims,ncol=length(unique(N.post$Site))); colnames(N.2020) <- unique(N.post$Site)
-    N.2020.Hauturu <- floor(rpert(n.sims,500,1000,1500)) # Values for Hauturu
+    # Initial values for Hauturu are close to carrying capacity (avoid immediate population crash)
+    N.2020.Hauturu <- floor(rnorm(n.sims,K.true[1,1,],K.true[1,1,]*0.1))
     
     # Estimated values for the first year (mean and precision of the elicited priors = the same for all simulations)
     # Carrying capacities
@@ -265,7 +266,8 @@ strategy <- run.strategies[w]
     # Numbers of adult birds in the first year - estimated values are mean and sd of posterior
     N.est[1,colnames(N.2020)] <- floor(tapply(post.long$Value,list(post.long$Variable,post.long$Site),mean)["F",])
     N.est.tau[1,colnames(N.2020)] <- tapply(post.long$Value,list(post.long$Variable,post.long$Site),sd)["F",]^-2 # sd to precision
-    N.est[1,site.names=="Hauturu"] <- 1000; N.est.tau[1,site.names=="Hauturu"] <- 190^-2 # # Estimates for Hauturu
+    N.est[1,site.names=="Hauturu"] <- floor(K.mn.prior[1,site.names=="Hauturu"])
+    N.est.tau[1,site.names=="Hauturu"] <- K.mn.tau.prior[1,site.names=="Hauturu"] # # Estimates for Hauturu
     # Harvest in the first year
     Harvest[1:2,] <- Genetics[1:2,] <- rep(0,n.sites)
     # Feeding in the first year - never Hauturu, always all occupied sites
