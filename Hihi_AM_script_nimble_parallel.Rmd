@@ -470,7 +470,7 @@ for(i in 10:10){ for(z in 1:n.sims){
 access.mat <- matrix(site.access,nrow=n.years,ncol=n.sites,byrow=T) # Site access
 ranger.mat <- matrix(c(0,rep(1,n.sites-1)),nrow=n.years,ncol=n.sites,byrow=T) # Site access
 bellbird.mat <- matrix(c(0,1,1,1,1,0,0,0,1,1,1,0,1),nrow=n.years,ncol=n.sites,byrow=T) # Bellbird presence
-vehicle.mat <- matrix(c(0,0,0,0,1,1,0,0,0,0,0,0,0),nrow=n.years,ncol=n.sites,byrow=T) # Bellbird presence
+vehicle.mat <- matrix(c(0,0,0,0,1,1,0,0,0,0,0,0,0),nrow=n.years,ncol=n.sites,byrow=T) # Vehicle needed
 
 all.Costs <- array(NA, dim=dim(all.N))
 for(i in 1:dim(all.N)[3]){for(j in 1:dim(all.N)[4]){
