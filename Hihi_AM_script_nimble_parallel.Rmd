@@ -26,12 +26,12 @@ if(send.email==TRUE){create_smtp_creds_key(id="hotmail",host="smtp.live.com",
 # NIMBLE: 7x1x20x1000 = 4.65 hrs
 max.cores <- detectCores(logical=FALSE)
 n.reps <- 3 # n.sims is a multiple of n.cores: how many simulations per core?
-n.sims <- (max.cores-1)*n.reps; n.years <- 3; feed.levels <- 2 # Simulation settings 
+n.sims <- (max.cores-1)*n.reps; n.years <- 20; feed.levels <- 2 # Simulation settings 
 ni <- 10000; nb <- 5000; nt <- 5; nc <- 3 # MCMC settings
 this.seed <- 123
 
 # Which strategies to run?
-run.strategies <- 1:1
+run.strategies <- 1:7
 results.strategies <- list()
 
 ########################################################################################################################
