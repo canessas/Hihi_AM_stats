@@ -1,3 +1,5 @@
+# Code to check sampler failures in some runs
+# note: needs debug_workspace to run
 library(nimble);library(extraDistr)
 
 kk <- 2 # which iteration (3, 12 failed)
