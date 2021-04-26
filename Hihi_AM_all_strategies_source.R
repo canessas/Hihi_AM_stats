@@ -724,7 +724,7 @@ strategy.7.rules <<- function(yr=y,ns=n.sites,sn=site.names,st=site.type,sa=site
       if(birds.available-sum(Hv[yr+2,Hv[yr+2,]>0])==0){break} # When all birds have been used, break
     } # for
   } # else 
-  
+
   # If one or more of the release sites are on remote islands:
   if(sum(sx[Hv[yr+2,]>0]=="Remote")>0){
     Hv[yr+2,sn=="Hauturu"] <- -Hv[yr+2,sn[Hv[yr+2,]>0&sx=="Remote"]]/2 # Harvest half of those birds from Hauturu
@@ -776,11 +776,9 @@ hihiCode <- nimbleCode({
     # Population sizes in subsequent years
     for(t in 1:(n.years-1)){
       
-      # Actual numbers of birds
-      N.real[t,i] <- N[t,i] + received[t,i] + removed[t,i]
-      releases[t,i] <- Harvest[t,i]*step(Harvest[t,i]) # Harvested birds   
-      received[t,i] ~ dbin(post.rel[i],releases[t,i]) # Extra mortality
-      removed[t,i] <- Harvest[t,i]*step(-Harvest[t,i]) # Birds removed from site
+      # Actual numbers of birds   
+      received[t,i] ~ dbin(post.rel[i],releases[t,i]) # Extra mortality releases[t,i]
+      N.real[t,i] <- N[t,i] + received[t,i] + removed[t,i] # Extra step to avoid sampler issues
       
       # Growth and crash dynamics    
       growth.temp[t,i] <- N.real[t,i] * r.max[t,i] * (1-N.real[t,i]/K[t,i])
