@@ -25,13 +25,13 @@ if(send.email==TRUE){create_smtp_creds_key(id="hotmail",host="smtp.live.com",
 # NIMBLE: 1x20x1000 = 45 minutes
 # NIMBLE: 7x1x20x1000 = 4.65 hrs
 max.cores <- detectCores(logical=FALSE)
-n.reps <- 3 # n.sims is a multiple of n.cores: how many simulations per core?
+n.reps <- 33 # n.sims is a multiple of n.cores: how many simulations per core?
 n.sims <- (max.cores-1)*n.reps; n.years <- 20; feed.levels <- 2 # Simulation settings 
 ni <- 10000; nb <- 5000; nt <- 5; nc <- 3 # MCMC settings
-this.seed <- 123
+this.seed <- 333
 
 # Which strategies to run?
-run.strategies <- 1:7
+run.strategies <- 7:7
 results.strategies <- list()
 
 ########################################################################################################################
@@ -116,6 +116,7 @@ for(i in 1:ncol(K.sites)){
     K.mn.tau.prior[j,i] <- sd(rpert(10000,min=K.sites[j,i,1],mode=K.sites[j,i,2],max=K.sites[j,i,3]),na.rm=TRUE)^-2 # Precision
   }
 }
+K.mn.prior[K.mn.prior==0] <- 0.001 # Avoid errors (match prior in the model to avoid division by 0)
 K.mn.tau.prior[K.mn.prior==0|K.mn.tau.prior==Inf] <- 1 # Avoid errors
 
 for(w in 1:length(run.strategies)){
@@ -130,7 +131,7 @@ strategy <- run.strategies[w]
   opts <- list(progress = progress)
   
   # Output to save
-  out.names <- c("N","N.est","Harvest","FR","failed","Genetics","K.managed","K.est","K.est.tau","K.true")  
+  out.names <- c("N","N.est","n.counts","Harvest","FR","failed","Genetics","K.managed","K.est","K.est.tau","K.true")  
   # Run parallel code
   full.results <- foreach(s=1:n.sims,.inorder = TRUE,
                           .options.snow = opts,.errorhandling = "pass",.export=paste0("strategy.",strategy,".rules"),
@@ -179,7 +180,7 @@ strategy <- run.strategies[w]
     # For existing sites, refine prior using available posteriors
     cor.mu.ext <- tapply(post.cor$COR,list(post.cor$Site),mean)  # Mean a.p from posterior
     cor.mu[names(cor.mu.ext)] <- cor.mu.ext # Replace
-    cor.sd[names(cor.mu.ext)] <- tapply(post.cor$COR,list(post.cor$Site),sd)^2 # Replace SD a.p from posterior
+    cor.sd[names(cor.mu.ext)] <- tapply(post.cor$COR,list(post.cor$Site),sd) # Replace SD a.p from posterior
     cor.beta <- estBetaParams(cor.mu,cor.sd^2) # Convert all to beta params
     
     ### Growth rate - calculated from Wang et al 2010 using arT method (Dillingham et al 2016)
@@ -212,10 +213,10 @@ strategy <- run.strategies[w]
     for(i in 1:n.sites){
       for(f in 1:feed.levels){
         K.true[f,i,1:n.sims] <- rpert(n.sims, min=K.sites[f,i,1],mode=K.sites[f,i,2],max=K.sites[f,i,3])}
-      for(s in 1:n.sims){
+      for(z in 1:n.sims){
       # Checks on true carrying capacity:
-      if(site.access[i]=="Remote"){K.true[2,i,s] <- K.true[1,i,s]} # For remote sites, fed=unfed
-      if(K.true[1,i,s]>K.true[2,i,s]){K.true[,i,s] <- rev(K.true[,i,s])} # Unfed always the smaller K
+      if(site.access[i]=="Remote"){K.true[2,i,z] <- K.true[1,i,z]} # For remote sites, fed=unfed
+      if(K.true[1,i,z]>K.true[2,i,z]){K.true[,i,z] <- rev(K.true[,i,z])} # Unfed always the smaller K
     }}
     
     # TRUE detection parameters for simulation: p and re.p
@@ -309,7 +310,7 @@ strategy <- run.strategies[w]
     for(i in 1:n.sites){K.managed[1,i] <- K.true[FR[1,i],i,s]}
     
     for(y in 1:(n.years-1)){
-      
+  
       # Number of individuals is the result of logistic growth, harvest/release and demographic stochasticity
       for(i in 1:n.sites){
         # State process (true population sizes)
@@ -333,7 +334,7 @@ strategy <- run.strategies[w]
       # If there are no learning sites, break, otherwise start learning process
       if(length(learning.sites)>0)
         
-        # Constants for NIMBLE model
+      # Constants for NIMBLE model
         hihiConst <- list(
           # Data
           n.sites=length(learning.sites),n.years=y+1, Feeding=FR[1:(y+1),learning.sites],
@@ -344,21 +345,36 @@ strategy <- run.strategies[w]
           min.sd.r.process=min(rmax.sd.process),max.sd.r.process=max(rmax.sd.process),
           K.mn.prior=K.mn.prior[,learning.sites],K.mn.tau.prior=K.mn.tau.prior[,learning.sites],
           p.rel.alpha=cor.beta$alpha[learning.sites],p.rel.beta=cor.beta$beta[learning.sites])
+        
       # Data for NIMBLE model
       hihiData <- list(n.counts=n.counts[1:(y+1),learning.sites], # Observed counts at occupied sites
                        N.init=(N.est[1,learning.sites]+10)/plogis(a.p.mu[learning.sites]), # Estimated initial population sizes
-                       Harvest=Harvest[1:(y+1),learning.sites]) 
+                       removed=ifelse(Harvest[1:(y+1),learning.sites]<0,Harvest[1:(y+1),learning.sites],0), # Removed birds
+                       releases=ifelse(Harvest[1:(y+1),learning.sites]>0,Harvest[1:(y+1),learning.sites],0)) # Released birds
+      
       # Initialize nodes
-      inits <- function(){list(N=n.counts[1:(y+1),learning.sites]+10,
-                               K.mn=K.mn.prior[,learning.sites],
-                               post.rel=cor.mu[learning.sites])} 
+      hihiInits <- function(){list(
+        N=sweep(round(n.counts[1:(y+1),learning.sites]/plogis(a.p.mu[learning.sites])), 
+                2, as.numeric(N.est[1,learning.sites]>0)*10, "+"),
+        N.real=sweep(round(n.counts[1:(y+1),learning.sites]/plogis(a.p.mu[learning.sites])), 
+                     2, as.numeric(N.est[1,learning.sites]>0)*10, "+") +
+          Harvest[1:(y+1),learning.sites],
+        received=matrix(0,nrow=y+1,ncol=length(learning.sites)),
+        mu.r=rmax.mu.prior,sd.r.process=runif(1,rmax.sd.process[1],rmax.sd.process[2]),
+        r.max=matrix(rmax.mu.prior,nrow=y+1,ncol=length(learning.sites),byrow=T),
+        post.rel=cor.mu[learning.sites],
+        a.p=a.p.mu[learning.sites], re.p.sd=sd.p.mu[learning.sites], re.p=matrix(0,nrow=y+1,ncol=length(learning.sites)),
+        p=matrix(plogis(a.p.mu[learning.sites]),nrow=y+1,ncol=length(learning.sites),byrow=T),
+        K.mn=K.mn.prior[,learning.sites]
+      )} 
+      
       # Set monitors
       params=c("N","K.mn","mu.r")
       # Nimble options (make as silent as possible)
       nimbleOptions(verbose=FALSE, verboseErrors=FALSE,MCMCprogressBar=FALSE,
                     MCMCuseConjugacy=FALSE,showCompilerOutput = FALSE,maxContractionsWarning=FALSE)
       # Build model - NB model code sourced from All_strategies_source script
-      hihiModel <- nimbleModel(code = hihiCode, data = hihiData, constants = hihiConst, inits = inits(), check=FALSE)
+      hihiModel <- nimbleModel(code = hihiCode, data = hihiData, constants = hihiConst, inits = hihiInits(), check=FALSE)
       # Compile model
       hihiCompiled <- compileNimble(hihiModel)
       # Sample model
@@ -374,19 +390,22 @@ strategy <- run.strategies[w]
       
       # Second, update those for sites where learning has occurred 
       temp.df <- data.frame(hihiSamples$summary$all.chains) # Convert MCMC output to data.frame
-      # Update carrying capacity at different feeding levels
-      K.est[y+1,learning.sites,] <- matrix(unlist(temp.df %>% select(Mean) %>% filter(grepl("K.mn", rownames(temp.df)))),
-                                           ncol=feed.levels,nrow=length(learning.sites),byrow=T) # mean  
-      K.est.tau[y+1,learning.sites,] <- matrix(unlist(temp.df %>% select(St.Dev.) %>% filter(grepl("K.mn", rownames(temp.df)))),
-                                               ncol=feed.levels,nrow=length(learning.sites),byrow=T)^-2 # precision
-      # Update rmax - not used in decisions but tracked to see learning
-      rmax.est[y+1] <- hihiSamples$summary$all.chains["mu.r","Mean"] # mean
-      rmax.est.tau[y+1] <- hihiSamples$summary$all.chains["mu.r","St.Dev."]^-2 # precision
-      # Update population size
-      N.est[2:(y+1),learning.sites] <- matrix(unlist(floor(temp.df %>% select(Mean) %>% filter(grepl("N", rownames(temp.df))))),
-                                              nrow=y+1,ncol=length(learning.sites))[-1,] # mean
-      N.est.tau[2:(y+1),learning.sites] <- matrix(unlist(floor(temp.df %>% select(St.Dev.) %>% filter(grepl("N", rownames(temp.df))))),
-                                                  nrow=y+1,ncol=length(learning.sites))[-1,]^-2 # precision
+      # Do this only there are no major estimation issues (e.g. sampler problems)
+      if(sum(temp.df$Mean > 3000|temp.df$Mean < -3000)==0){
+        # Update carrying capacity at different feeding levels
+        K.est[y+1,learning.sites,] <- matrix(unlist(temp.df %>% select(Mean) %>% filter(grepl("K.mn", rownames(temp.df)))),
+                                             ncol=feed.levels,nrow=length(learning.sites),byrow=T) # mean  
+        K.est.tau[y+1,learning.sites,] <- matrix(unlist(temp.df %>% select(St.Dev.) %>% filter(grepl("K.mn", rownames(temp.df)))),
+                                                 ncol=feed.levels,nrow=length(learning.sites),byrow=T)^-2 # precision
+        # Update rmax - not used in decisions but tracked to see learning
+        rmax.est[y+1] <- hihiSamples$summary$all.chains["mu.r","Mean"] # mean
+        rmax.est.tau[y+1] <- hihiSamples$summary$all.chains["mu.r","St.Dev."]^-2 # precision
+        # Update population size
+        N.est[2:(y+1),learning.sites] <- matrix(unlist(floor(temp.df %>% select(Mean) %>% filter(grepl("N", rownames(temp.df))))),
+                                                nrow=y+1,ncol=length(learning.sites))[-1,] # mean
+        N.est.tau[2:(y+1),learning.sites] <- matrix(unlist(floor(temp.df %>% select(St.Dev.) %>% filter(grepl("N", rownames(temp.df))))),
+                                                    nrow=y+1,ncol=length(learning.sites))[-1,]^-2 # precision
+      }
       # Clean up model objects (can be large)
       # rm(temp.df,hihiConst,hihiData,hihiModel,hihiCompiled,hihiSamples)
       
@@ -434,8 +453,8 @@ strategy <- run.strategies[w]
   # Save strategy results as separate object (for multi-strategy runs)
   results.strategies[[w]] <- full.results
   # Give update on progress of strategies loop
-  print(paste("Strategy", w, "completed"))
-  save.image("Hihi_AM_nimble_parallel_results.RData") # Progressive save at the end of each strategy
+  print(paste("Strategy", strategy, "completed"))
+  # save.image("Hihi_AM_nimble_parallel_results.RData") # Progressive save at the end of each strategy
 } # Strategies
   
 ############################################################################################################################
@@ -445,19 +464,20 @@ strategy <- run.strategies[w]
 names(results.strategies) <- paste0("Strategy.",run.strategies)
 
 # Convert results to arrays for variables N, N.est, Harvest, FR, failed, Genetics, K.managed
-for(i in 1:7){ for(z in 1:n.sims){
+for(i in 1:8){ for(z in 1:n.sims){
   assign(paste0("all.",out.names[i]),
          array(as.numeric(unlist(sapply(sapply(results.strategies,"[",1:n.sims),"[",i))),
                dim=c(n.years,n.sites,n.sims,length(run.strategies))))
 }}
+all.FR <- all.FR-1 # For feeding rates, convert 2/1 to 1/0
 # Convert results to arrays for variables K.est, K.est.tau
-for(i in 8:9){ for(z in 1:n.sims){
+for(i in 9:10){ for(z in 1:n.sims){
   assign(paste0("all.",out.names[i]),
          array(as.numeric(unlist(sapply(sapply(results.strategies,"[",1:n.sims),"[",i))),
                dim=c(n.years,n.sites,2,n.sims,length(run.strategies))))
 }}
 # Convert results to arrays for variable K.true
-for(i in 10:10){ for(z in 1:n.sims){
+for(i in 11:11){ for(z in 1:n.sims){
   assign(paste0("all.",out.names[i]),
          array(as.numeric(unlist(sapply(sapply(results.strategies,"[",1:n.sims),"[",i))),
                dim=c(feed.levels,n.sites,n.sims,length(run.strategies))))
@@ -468,35 +488,41 @@ for(i in 10:10){ for(z in 1:n.sims){
 
 # Matrices with site characteristics (eases calculation)
 access.mat <- matrix(site.access,nrow=n.years,ncol=n.sites,byrow=T) # Site access
-ranger.mat <- matrix(c(0,rep(1,n.sites-1)),nrow=n.years,ncol=n.sites,byrow=T) # Site access
-bellbird.mat <- matrix(c(0,1,1,1,1,0,0,0,1,1,1,0,1),nrow=n.years,ncol=n.sites,byrow=T) # Bellbird presence
-vehicle.mat <- matrix(c(0,0,0,0,1,1,0,0,0,0,0,0,0),nrow=n.years,ncol=n.sites,byrow=T) # Vehicle needed
+ranger.mat <- matrix(c(0,rep(1,n.sites-1)),nrow=n.years,ncol=n.sites,byrow=T) # Site ranger (all except Hauturu)
+# Other variables
+bellbird.mat <- vehicle.mat <- matrix(rep(0,n.sites),nrow=n.years,ncol=n.sites,byrow=T) 
+# Bellbird competition: Kapiti, Tawharanui, Tiritiri
+bellbird.mat[,which(site.names%in%c("Kapiti","Tawh","Tiri"))] <- 1
+# Vehicle needed for feeding: Maungatautari, Rotoroa, Shakespear, Tawharanui, Tiritiri
+vehicle.mat[,which(site.names%in%c("Maunga","Rotor","Shake","Tawh","Tiri"))] <- 1
 
 all.Costs <- array(NA, dim=dim(all.N))
 for(i in 1:dim(all.N)[3]){for(j in 1:dim(all.N)[4]){
   
   all.Costs[,,i,j] <-
+# Cost of national ranger: 72800 (not added for now)
 # Cost of site maintenance:
   (all.N.est[,,i,j]>0)*ranger.mat*36400 + # Cost of each occupied site(ranger)
-  (all.N.est[,,i,j]>0&all.FR[,,i,j]==2)*(11492+9100) + # Cost of each fed site - breeding  + off season (volunteer)
-  (all.N.est[,,i,j]>0&all.FR[,,i,j]==2)*ifelse(bellbird.mat==0,128,1920) + # Cost of sugar depending on bellbird presence
-  (all.N.est[,,i,j]>0&all.FR[,,i,j]==2)*vehicle.mat*60 + # Cost of vehicle where required
+  (all.N.est[,,i,j]>0&all.FR[,,i,j]==1)*(11492+9100) + # Cost of each fed site - breeding  + off season (volunteer)
+  (all.N.est[,,i,j]>0&all.FR[,,i,j]==1)*ifelse(bellbird.mat==0,128,1920) + # Cost of sugar depending on bellbird presence
+  (all.N.est[,,i,j]>0&all.FR[,,i,j]==1)*vehicle.mat*60 + # Cost of vehicle where required
 # Cost of translocation:
-  (all.Harvest[,,i,j]!=0)*(access.mat=="Reach")*30000 + # Cost of translocation from/to easily reached sites ("Reach")
-  (all.Harvest[,,i,j]!=0)*(access.mat=="Remote")*60000 + # Cost of translocation from/to remote sites ("Remote")
-  (all.Harvest[,,i,j]!=0)*17500 + # Volunteer team for each translocation
+  (all.Harvest[,,i,j]<0)*(access.mat=="Reach")*30000 + # Cost of translocation from easily reached sites ("Reach")
+  (all.Harvest[,,i,j]<0)*(access.mat=="Remote")*40000 + # Cost of translocation from remote sites ("Remote") - CHECK WITH KEV
+  (all.Harvest[,,i,j]<0)*17500 + # Volunteer team for each translocation
 # At first release at new site:
   (all.N.est[,,i,j]==0&all.Harvest[,,i,j]>0)*1600 + # Add nest boxes
-  (all.N.est[,,i,j]==0&all.Harvest[,,i,j]>0&all.FR[,,i,j]==2)*4000 # Add feeding cages if site fed
-  
+  (all.N.est[,,i,j]==0&all.Harvest[,,i,j]>0&all.FR[,,i,j]==1)*4000 # Add feeding cages if site fed
 }}
-
-# Other costs still to be included
-# 320 # New nest boxes every 5 years
-# 72800 # Cost of National officer
-
-# questions: are translocation double counted?
-# question: are nest boxes used at all sites?
+# Adjusts costs for inflation
+NZ.inf <- read.csv("NZ_inflation.csv")
+for(i in 1:dim(all.Costs)[3]){for(j in 1:dim(all.Costs)[4]){
+  # Draw inflation rates randomly based on last n years (different across sims and strategies)
+  yr.inf <- sample(NZ.inf$Inflation[NZ.inf$Year>2002],dim(all.Costs)[1])*0.01
+  for(t in 2:dim(all.Costs)[1]){
+    all.Costs[t,,i,j] <- all.Costs[t,,i,j]*prod(1+yr.inf[2:t])
+  }
+}}
 
 (time.taken.par <- round(Sys.time() - start.time,2)) # End timing
 
